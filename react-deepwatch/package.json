@@ -1,0 +1,46 @@
+{
+  "name": "react-deepwatch",
+  "version": "",
+  "description": "",
+  "keywords": [
+    "react",
+    "proxy"
+  ],
+  "author": "Boris Gingold <bogeee@bogitech.de>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bogeeee/react-deepwatch.git",
+    "directory": "react-deepwatch"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "import": "./index_esm.mjs",
+      "require": "./index.js"
+    }
+  },
+  "scripts": {
+    "devPlayground": "tsx devPlayground.ts",
+    "clean": "tsc --build --clean && rimraf dist LICENSE readme.md db",
+    "build": "tsc --build --force",
+    "test": "npm run clean && vitest --clearScreen --hideSkippedTests",
+    "prepublish": "npm run clean && npm run build && ncp ../LICENSE ./LICENSE && ncp ../readme.md ./readme.md",
+    "publish:npmlogin": "npm login",
+    "publish:publish": "npm run prepublish && npm publish"
+
+  },
+  "dependencies": {
+    "@types/underscore": "^1.11.4",
+    "@types/node": "^20.12.7",
+    "underscore": "^1.13.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@vitest/ui": "^1.5.1",
+    "rimraf": "=5.0.5",
+    "ncp": "=2.0.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  }
+}

@@ -1,0 +1,10 @@
+.idea
+/node_modules/
+/**/*.js
+/**/*.d.ts
+!jest.config.js
+/**/*.map
+/tsconfig.tsbuildinfo
+devPlayground.ts
+readme.md
+LICENSE

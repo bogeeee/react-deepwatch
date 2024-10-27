@@ -1,0 +1,5 @@
+/**/tsconfig.*
+/**/*.test.*
+devPlayground.*
+/__tests__
+/db
