@@ -16,14 +16,17 @@
   "main": "index.js",
   "exports": {
     ".": {
-      "import": "./index_esm.mjs",
-      "require": "./index.js"
+      "browser": "./dist/mjs/index.js",
+      "default": "./index.js"
+    },
+    "./develop": {
+      "browser": "./index.ts"
     }
   },
   "scripts": {
-    "devPlayground": "tsx devPlayground.ts",
-    "clean": "tsc --build --clean && rimraf dist LICENSE readme.md db",
-    "build": "tsc --build --force",
+    "devPlayground.ts": "tsx devPlayground.ts",
+    "clean": "tsc --build --clean && rimraf dist LICENSE readme.md",
+    "build": "tsc --build --force && tsc -module ES6 --outDir dist/mjs",
     "test": "npm run clean && vitest --clearScreen --hideSkippedTests",
     "prepublish": "npm run clean && npm run build && ncp ../LICENSE ./LICENSE && ncp ../readme.md ./readme.md",
     "publish:npmlogin": "npm login",
