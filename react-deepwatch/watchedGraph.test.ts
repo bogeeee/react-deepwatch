@@ -97,6 +97,24 @@ describe('ProxiedGraph tests', () => {
         proxy.checkThisShouldNotBeOrigObj = "dummy";
     })
 
+    test("Property accessors: 'this' should be the topmost proxy when using 2 layers of proxies", () => {
+        const origObj = {
+            get thisIsProxy2() {
+                return this === proxy2;
+            },
+
+            set checkThisShouldBeProxy2(value: string) {
+                if(this !== proxy2) {
+                    throw new Error("Assertion check failed");
+                }
+            }
+        };
+        const proxy1 = new WatchedGraph().getProxyFor(origObj);
+        const proxy2 = new WatchedGraph().getProxyFor(proxy1);
+        expect(proxy2.thisIsProxy2).toBeTruthy();
+        proxy2.checkThisShouldBeProxy2 = "dummy";
+    })
+
     test("Set a property that does not exist", () => {
         const origObj = {} as any;
         const proxy = new WatchedGraph().getProxyFor(origObj);

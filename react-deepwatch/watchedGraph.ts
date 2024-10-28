@@ -1,7 +1,9 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
 
-type Change<O extends object> = {parent: O, prop: keyof O}
+type ObjKey = keyof object;
 
+type AfterReadListener = (obj: object, prop: ObjKey, readValue: unknown) => void;
+type AfterWriteListener = (obj: object, prop: ObjKey, writtenValue: unknown) => void;
 
 /**
  * Use cases:
@@ -11,32 +13,61 @@ type Change<O extends object> = {parent: O, prop: keyof O}
 export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
     // *** Configuration: ***
     protected graphProxyHandlerConstructor = WatchedGraphHandler
+
+    /**
+     * Watches also writes that are not made through a proxy of this WatchedGraph by installing a setter (property accessor) on each of the desired properties
+     * Works only for **individual** properties which you are explicitly listening on, and not on the whole Graph.
+     * See {@link onAfterWrite} for the listener
+     *
+     */
+    public watchWritesFromOutside = true
+
     // *** State: ****
-    protected readListeners = new Set<((change: Change<any>) => void)>()
-    protected writeListeners = new Set<((change: Change<any>) => void)>()
+
+    /**
+     * Called after a read has been made to any object inside this graph
+     * @protected
+     */
+    protected afterReadListeners = new Set<AfterReadListener>()
+
+    /**
+     * Called after a write has been made to any object inside this graph
+     * Note: There are also listeners for specified properties (which are more capable)
+     * TODO: Do we need this ?
+     * @protected
+     */
+    protected afterWriteListeners = new Set<AfterWriteListener>()
 
 
-    onWrite(listener: (change: Change<any>) => void) {
-        this.readListeners.add(listener);
+    onAfterRead(listener: AfterReadListener) {
+        this.afterReadListeners.add(listener);
     }
-    offWrite(listener: (change: Change<any>) => void) {
-        this.readListeners.delete(listener);
+
+    offAfterRead(listener: AfterReadListener) {
+        this.afterReadListeners.delete(listener);
     }
 
-    withRecordWrites(exec: () => void): Change<any>[] {
-        this.onWrite((change => {
-
-        }));
-        throw new Error("TODO")
-    }
-
-    async asyncWithRecordChanges(exec: () => Promise<void>): Promise<Change<any>[]> {
+    /**
+     * Watches for writes on a specified property
+     * @param obj
+     * @param key
+     * @param listener
+     */
+    onAfterWriteOnProperty(obj: object, key: PropertyKey, listener:  AfterWriteListener) {
         throw new Error("TODO");
     }
+
+    offAfterWriteOnProperty(obj: object, key: PropertyKey, listener:  AfterWriteListener) {
+        throw new Error("TODO");
+    }
+
+
 }
 
 class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     constructor(target: object, graph: WatchedGraph) {
         super(target, graph);
     }
+
+    // TODO: implement afterRead and afterWrite listeners
 }

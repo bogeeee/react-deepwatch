@@ -60,7 +60,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
     get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
         const getter = this.getGetter(this.target, p);
         let value;
-        if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined) { // Access via property accessort ?
+        if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined) { // Access via property accessor ?
             value = getter.apply(this.proxy,[]); // Call the accessor with a proxied this
         }
         else {
