@@ -35,7 +35,7 @@ function useWatched<T extends object>(obj: T): T {
     return currentRun!.watchedGraph.getProxyFor(obj);
 }
 
-function useWatchedState() {
+export function useWatchedState(initial: object) {
 
 }
 
@@ -55,5 +55,7 @@ function useLoad<T>(loader: () => Promise<T>): T {
 
 
 function load<T>(loader: () => Promise<T>): T {
+    // TODO: Also add the result to the watched props, and record, if something actually reads it later. Only then a reload is needed.
+    //  TODO: Test that ignoring the result won't trigger a reload then. It is like an effect.
     return undefined as T;
 }
