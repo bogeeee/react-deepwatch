@@ -1,4 +1,17 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
+import {MapSet} from "./Util";
+
+export type ObjKey = string | symbol;
+
+type AfterReadListener = (obj: object, prop: ObjKey, value: unknown) => void;
+type AfterWriteListener = (value: unknown) => void;
+
+
+class RecordedRead {
+    equals(other: RecordedRead) {
+        throw new Error("TODO");
+    }
+}
 
 type ObjKey = keyof object;
 
@@ -20,7 +33,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
      * See {@link onAfterWrite} for the listener
      *
      */
-    public watchWritesFromOutside = true
+    public watchWritesFromOutside = false; //
 
     // *** State: ****
 
@@ -28,7 +41,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
      * Called after a read has been made to any object inside this graph
      * @protected
      */
-    protected afterReadListeners = new Set<AfterReadListener>()
+    _afterReadListeners = new Set<AfterReadListener>()
 
     /**
      * Called after a write has been made to any object inside this graph
@@ -36,38 +49,68 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
      * TODO: Do we need this ?
      * @protected
      */
-    protected afterWriteListeners = new Set<AfterWriteListener>()
+    _afterWriteListeners = new Set<AfterWriteListener>()
 
 
     onAfterRead(listener: AfterReadListener) {
-        this.afterReadListeners.add(listener);
+        this._afterReadListeners.add(listener);
     }
 
     offAfterRead(listener: AfterReadListener) {
-        this.afterReadListeners.delete(listener);
+        this._afterReadListeners.delete(listener);
     }
 
     /**
      * Watches for writes on a specified property
      * @param obj
-     * @param key
+     * @param key Not restricted here (for the tests), but it must not be number !
      * @param listener
      */
-    onAfterWriteOnProperty(obj: object, key: PropertyKey, listener:  AfterWriteListener) {
-        throw new Error("TODO");
+    onAfterWriteOnProperty<O extends  object, K extends keyof O>(obj: O, key: K, listener:  AfterWriteListener) {
+        if(this.watchWritesFromOutside) {
+            throw new Error("TODO");
+        }
+        else {
+            this.getHandlerFor(obj).afterWriteOnPropertyListeners.add(key as ObjKey, listener);
+        }
+
     }
 
-    offAfterWriteOnProperty(obj: object, key: PropertyKey, listener:  AfterWriteListener) {
-        throw new Error("TODO");
+    /**
+     * Watches for writes on a specified property
+     * @param obj
+     * @param key Not restricted here (for the tests), but it must not be number !
+     * @param listener
+     */
+    offAfterWriteOnProperty<O extends  object, K extends keyof O>(obj: O, key: K, listener:  AfterWriteListener) {
+        if(this.watchWritesFromOutside) {
+            throw new Error("TODO");
+        }
+        else {
+            this.getHandlerFor(obj).afterWriteOnPropertyListeners.delete(key as ObjKey, listener);
+        }
     }
+
 
 
 }
 
 class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
+    afterWriteOnPropertyListeners = new MapSet<ObjKey, AfterWriteListener>();
+
     constructor(target: object, graph: WatchedGraph) {
         super(target, graph);
     }
 
     // TODO: implement afterRead and afterWrite listeners
+    rawRead(key: ObjKey) {
+        const result = super.rawRead(key);
+        this.graph._afterReadListeners.forEach(l => l(this.target, key, result));
+        return result;
+    }
+
+    protected rawWrite(key: string | symbol, newValue: any) {
+        super.rawWrite(key, newValue);
+        this.afterWriteOnPropertyListeners.get(key)?.forEach(l => l(newValue));
+    }
 }

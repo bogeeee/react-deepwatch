@@ -1,6 +1,8 @@
 /**
  *
  */
+import {ObjKey} from "./watchedGraph";
+
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
     protected abstract graphProxyHandlerConstructor: {  new(target: object, graph: any): HANDLER  }
@@ -26,10 +28,16 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
 
         handlerForObj = new this.graphProxyHandlerConstructor(obj, this);
         // register:
+        proxyToProxyHandler.set(handlerForObj.proxy, handlerForObj);
         this.proxies.add(handlerForObj.proxy);
         this.objectsToProxyHandlers.set(obj, handlerForObj);
 
+
         return handlerForObj.proxy as O;
+    }
+
+    getHandlerFor(obj: object) {
+        return getProxyHandler(this.getProxyFor(obj)) as HANDLER;
     }
 
 }
@@ -61,11 +69,11 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         const getter = this.getGetter(this.target, p);
         let value;
         if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined) { // Access via property accessor ?
-            value = getter.apply(this.proxy,[]); // Call the accessor with a proxied this
+            return value = getter.apply(this.proxy,[]); // Call the accessor with a proxied this
         }
         else {
             //@ts-ignore
-            value = this.target[p];
+            value = this.rawRead(p);
         }
 
         if(value != null && typeof value === "object") {
@@ -73,6 +81,11 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         }
 
         return value;
+    }
+
+    rawRead(key: ObjKey): unknown {
+        //@ts-ignore
+        return this.target[key as any];
     }
 
     set(fake_target:object, p:string | symbol, value:any, receiver:any) {
@@ -83,15 +96,15 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         else {
             //@ts-ignore
             if (this.target[p] !== value) { // modify ?
-                this.handleModifyTarget(p, value);
+                this.rawWrite(p, value);
             }
         }
         return true
     }
 
-    protected handleModifyTarget(p: string | symbol, value: any) {
+    protected rawWrite(p: string | symbol, newValue: any) {
         //@ts-ignore
-        this.target[p] = value
+        this.target[p] = newValue
     }
 
     protected getGetter(target: object, propName: string | symbol): (() => any) | undefined {

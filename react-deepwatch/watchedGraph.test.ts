@@ -1,5 +1,5 @@
 import {it, expect, test, beforeEach,describe } from 'vitest'
-import {WatchedGraph} from "./watchedGraph";
+import {ObjKey, WatchedGraph} from "./watchedGraph";
 
 
 beforeEach(() => {
@@ -188,3 +188,136 @@ describe('ProxiedGraph tests', () => {
 
 });
 
+describe('WatchedGraph tests', () => {
+    test("onAfterRead", () => {
+        const sampleGraph = createSampleObjectGraph();
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(sampleGraph);
+        let reads: {obj: object, key: ObjKey, value: unknown}[] = [];
+        watchedGraph.onAfterRead((obj, key,value) => reads.push({obj, key, value}));
+
+        reads = [];
+        expect(proxy.appName).toBeDefined();
+        expect(reads).toEqual([{obj: sampleGraph, key: "appName", value: "HelloApp"}]);
+
+        reads = [];
+        expect(proxy.nullable).toBeNull();
+        expect(reads).toEqual([{obj: sampleGraph, key: "nullable", value: null}]);
+
+        reads = [];
+        expect(proxy.users[0]).toBeDefined();
+        expect(reads).toEqual([
+            {obj: sampleGraph, key: "users", value: sampleGraph.users},
+            {obj: sampleGraph.users, key: "0", value: sampleGraph.users[0]}
+        ]);
+    })
+
+    test("onAfterRead - iterate array", () => {
+        const sampleGraph = createSampleObjectGraph();
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(sampleGraph);
+        let reads: { obj: object, key: ObjKey, value: unknown }[] = [];
+        watchedGraph.onAfterRead((obj, key, value) => reads.push({obj, key, value}));
+
+        // Iterate an array
+        reads = [];
+        proxy.users.forEach(user => expect(user).toBeDefined());
+        expect(reads).toEqual([
+            {obj: sampleGraph, key: "users", value: sampleGraph.users},
+            {obj: sampleGraph.users, key: "forEach", value: sampleGraph.users.forEach},
+            {obj: sampleGraph.users, key: "length", value: sampleGraph.users.length},
+            {obj: sampleGraph.users, key: "0", value: sampleGraph.users[0]},
+            {obj: sampleGraph.users, key: "1", value: sampleGraph.users[1]},
+        ]);
+
+    });
+
+    test("onAfterRead - whitebox getters", () => {
+        const origObj = {
+            _prop: true,
+            get prop() {
+                return this._prop;
+            }
+        }
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(origObj);
+
+        // Install listener:
+        let reads: {obj: object, key: ObjKey, value: unknown}[] = [];
+        watchedGraph.onAfterRead((obj, key,value) => reads.push({obj, key, value}));
+
+        expect(proxy.prop).toBeDefined();
+        expect(reads).toEqual([{obj: origObj, key: "_prop", value: true}]);
+    });
+
+    test("onAfterWrite", () => {
+        const sampleGraph = createSampleObjectGraph();
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(sampleGraph);
+
+        // Install listener:
+        let writes: unknown[] = [];
+        watchedGraph.onAfterWriteOnProperty(sampleGraph, "appName", (newValue) => writes.push(newValue));
+
+        proxy.appName = "xyz"; proxy.appName = "123";
+        expect(writes).toEqual(["xyz", "123"])
+
+    });
+
+    test("onAfterWrite increase counter with ++", () => {
+        const sampleGraph = {counter: 0};
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(sampleGraph);
+
+        // Install listener:
+        let writes: unknown[] = [];
+        watchedGraph.onAfterWriteOnProperty(sampleGraph, "counter", (newValue) => writes.push(newValue));
+
+        proxy.counter++;
+        expect(writes).toEqual([1]);
+
+    });
+
+    test("onAfterWrite expect to receive non-proxied objects", () => {
+        const origObject: {myProp?: object} = {
+            myProp: undefined,
+        };
+        const valueObj = {}
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(origObject);
+
+        // Install listener:
+        let writes: unknown[] = [];
+        watchedGraph.onAfterWriteOnProperty(origObject, "myProp", (newValue) => writes.push(newValue));
+
+        proxy.myProp = valueObj;
+        expect(writes[0] === valueObj).toBeTruthy()
+    });
+
+    test("onAfterWrite arrays", () => {
+        const origObj: string[] = [];
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(origObj);
+
+        // Install listener:
+        let writes: string[] = [];
+        //@ts-ignore The proxy retrieves keys as strings or symbols
+        watchedGraph.onAfterWriteOnProperty(origObj, "0", (newValue) => writes.push(newValue));
+        let writesToLength: number[] = [];
+        watchedGraph.onAfterWriteOnProperty(origObj, "length", (newValue) => writesToLength.push(newValue  as number));
+
+        proxy.push("a");
+        proxy.push("b"); // not listening on index 1
+        proxy[0] = "a_new"; // not listening on index 1
+
+        expect(writes).toEqual(["a","a_new"]);
+        expect(writesToLength).toEqual([1,2]); // This might not work. We might need to enhance the push method
+
+    });
+
+    test("Template", () => {
+        const sampleGraph = createSampleObjectGraph();
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(sampleGraph);
+    });
+});
