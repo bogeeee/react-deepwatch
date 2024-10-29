@@ -36,3 +36,15 @@ export class MapSet<K, V> {
     }
 }
 
+export function arraysAreEqualsByPredicateFn<A, B>(a: A[], b: B[], equalsFn: (a: A,b: B) => boolean) {
+    if(a.length !== b.length) {
+        return false;
+    }
+    for(const k in a) {
+        if(!equalsFn(a[k], b[k])) {
+            return false;
+        }
+    }
+    return true;
+}
+

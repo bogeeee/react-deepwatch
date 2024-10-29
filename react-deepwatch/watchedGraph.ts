@@ -1,22 +1,35 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
 import {MapSet} from "./Util";
+import _ from "underscore"
 
 export type ObjKey = string | symbol;
 
-type AfterReadListener = (obj: object, prop: ObjKey, value: unknown) => void;
+type AfterReadListener = (read: RecordedRead) => void;
 type AfterWriteListener = (value: unknown) => void;
 
 
-class RecordedRead {
+export class RecordedRead {
     equals(other: RecordedRead) {
         throw new Error("TODO");
     }
 }
 
-type ObjKey = keyof object;
+export class RecordedPropertyRead extends RecordedRead{
+    proxyHandler?: WatchedGraphHandler
+    obj!: object;
+    key!: ObjKey;
+    value!: unknown;
 
-type AfterReadListener = (obj: object, prop: ObjKey, readValue: unknown) => void;
-type AfterWriteListener = (obj: object, prop: ObjKey, writtenValue: unknown) => void;
+    constructor() {
+        super();
+    }
+
+    onChangeOnce(listener: (newValue: unknown) => void) {
+        throw new Error("TODO");
+    }
+}
+
+
 
 /**
  * Use cases:
@@ -105,7 +118,16 @@ class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     // TODO: implement afterRead and afterWrite listeners
     rawRead(key: ObjKey) {
         const result = super.rawRead(key);
-        this.graph._afterReadListeners.forEach(l => l(this.target, key, result));
+
+        // Create the RecordedPropertyRead:
+        let read = new RecordedPropertyRead();
+        read.proxyHandler = this;
+        read.obj = this.target;
+        read.key = key;
+        read.value = result;
+
+        this.graph._afterReadListeners.forEach(l => l(read)); // Inform listeners
+
         return result;
     }
 

@@ -1,6 +1,7 @@
 import {it, expect, test, beforeEach,describe } from 'vitest'
-import {ObjKey, WatchedGraph} from "./watchedGraph";
-
+import {ObjKey, RecordedPropertyRead, WatchedGraph} from "./watchedGraph";
+import _ from "underscore"
+import {arraysAreEqualsByPredicateFn} from "./Util";
 
 beforeEach(() => {
 
@@ -189,46 +190,52 @@ describe('ProxiedGraph tests', () => {
 });
 
 describe('WatchedGraph tests', () => {
+    function readsEqual(reads: RecordedPropertyRead[], expected: { obj: object, key: ObjKey, value: unknown }[]) {
+        return arraysAreEqualsByPredicateFn(reads, expected, (propRead, exp) => {
+            return propRead.obj === exp.obj && propRead.key === exp.key && propRead.value === exp.value;
+        })
+    }
+
     test("onAfterRead", () => {
         const sampleGraph = createSampleObjectGraph();
         let watchedGraph = new WatchedGraph();
         const proxy = watchedGraph.getProxyFor(sampleGraph);
-        let reads: {obj: object, key: ObjKey, value: unknown}[] = [];
-        watchedGraph.onAfterRead((obj, key,value) => reads.push({obj, key, value}));
+        let reads: RecordedPropertyRead[] = [];
+        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
 
         reads = [];
         expect(proxy.appName).toBeDefined();
-        expect(reads).toEqual([{obj: sampleGraph, key: "appName", value: "HelloApp"}]);
+        expect(readsEqual(reads, [{obj: sampleGraph, key: "appName", value: "HelloApp"}])).toBeTruthy();
 
         reads = [];
         expect(proxy.nullable).toBeNull();
-        expect(reads).toEqual([{obj: sampleGraph, key: "nullable", value: null}]);
+        expect(readsEqual(reads, [{obj: sampleGraph, key: "nullable", value: null}])).toBeTruthy();
 
         reads = [];
         expect(proxy.users[0]).toBeDefined();
-        expect(reads).toEqual([
+        expect(readsEqual(reads, [
             {obj: sampleGraph, key: "users", value: sampleGraph.users},
             {obj: sampleGraph.users, key: "0", value: sampleGraph.users[0]}
-        ]);
+        ])).toBeTruthy();
     })
 
     test("onAfterRead - iterate array", () => {
         const sampleGraph = createSampleObjectGraph();
         let watchedGraph = new WatchedGraph();
         const proxy = watchedGraph.getProxyFor(sampleGraph);
-        let reads: { obj: object, key: ObjKey, value: unknown }[] = [];
-        watchedGraph.onAfterRead((obj, key, value) => reads.push({obj, key, value}));
+        let reads: RecordedPropertyRead[] = [];
+        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
 
         // Iterate an array
         reads = [];
         proxy.users.forEach(user => expect(user).toBeDefined());
-        expect(reads).toEqual([
+        expect(readsEqual(reads, [
             {obj: sampleGraph, key: "users", value: sampleGraph.users},
             {obj: sampleGraph.users, key: "forEach", value: sampleGraph.users.forEach},
             {obj: sampleGraph.users, key: "length", value: sampleGraph.users.length},
             {obj: sampleGraph.users, key: "0", value: sampleGraph.users[0]},
             {obj: sampleGraph.users, key: "1", value: sampleGraph.users[1]},
-        ]);
+        ])).toBeTruthy();
 
     });
 
@@ -243,11 +250,11 @@ describe('WatchedGraph tests', () => {
         const proxy = watchedGraph.getProxyFor(origObj);
 
         // Install listener:
-        let reads: {obj: object, key: ObjKey, value: unknown}[] = [];
-        watchedGraph.onAfterRead((obj, key,value) => reads.push({obj, key, value}));
+        let reads: RecordedPropertyRead[] = [];
+        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
 
         expect(proxy.prop).toBeDefined();
-        expect(reads).toEqual([{obj: origObj, key: "_prop", value: true}]);
+        expect(readsEqual(reads,[{obj: origObj, key: "_prop", value: true}])).toBeTruthy();
     });
 
     test("onAfterWrite", () => {
