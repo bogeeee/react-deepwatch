@@ -1,28 +1,54 @@
-import {WatchedGraph} from "./watchedGraph";
+import {RecordedRead, WatchedGraph} from "./watchedGraph";
 import {throwError} from "./Util";
 import {useState} from "react";
 
 let currentRun: {
     watchedGraph: WatchedGraph,
-    rerender: () => void
+    reRender: () => void
 } | undefined
+
 export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any) {
     return (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
 
         currentRun === undefined || throwError("Illegal state: already in currentRun");
 
+        const cleanListenerFns: (()=>void)[] = [];
+
+        function reRender() {
+            cleanListenerFns.forEach(c => c()); // Clean the listeners
+            setRenderCounter(renderCounter+1);
+        }
+
         const watchedGraph = new WatchedGraph();
         currentRun = {
             watchedGraph,
-            rerender() {
-                setRenderCounter(renderCounter+1);
-            }
+            reRender
         }
 
         try {
             const watchedProps = watchedGraph.getProxyFor(props);
-            return componentFn(watchedProps);
+
+            // Install read listener:
+            let readListener = (read: RecordedRead)  => {
+                // Re-render on a change of the read value:
+                const changeListener = (newValue: unknown) => {
+                    if(currentRun) {
+                        throw new Error("You must not modify a watched object during the render run.");
+                    }
+                    reRender()
+                }
+                read.onChange(changeListener);
+                cleanListenerFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+            };
+            watchedGraph.onAfterRead(readListener)
+
+            try {
+                return componentFn(watchedProps); // Run the user's component function
+            }
+            finally {
+                watchedGraph.offAfterRead(readListener);
+            }
         }
         finally {
             currentRun = undefined;
@@ -36,7 +62,8 @@ function useWatched<T extends object>(obj: T): T {
 }
 
 export function useWatchedState(initial: object) {
-
+    const [state]  = useState(initial);
+    return useWatched(state);
 }
 
 /**

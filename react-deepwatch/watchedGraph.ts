@@ -8,14 +8,20 @@ type AfterReadListener = (read: RecordedRead) => void;
 type AfterWriteListener = (value: unknown) => void;
 
 
-export class RecordedRead {
-    equals(other: RecordedRead) {
-        throw new Error("TODO");
-    }
+export abstract class RecordedRead {
+    abstract equals(other: RecordedRead): void;
+
+    abstract onChange(listener: (newValue: unknown) => void): void;
+
+    abstract offChange(listener: (newValue: unknown) => void): void;
+
 }
 
 export class RecordedPropertyRead extends RecordedRead{
     proxyHandler?: WatchedGraphHandler
+    /**
+     * A bit redundant with proxyhandler. But for performance reasons, we leave it
+     */
     obj!: object;
     key!: ObjKey;
     value!: unknown;
@@ -24,8 +30,30 @@ export class RecordedPropertyRead extends RecordedRead{
         super();
     }
 
-    onChangeOnce(listener: (newValue: unknown) => void) {
-        throw new Error("TODO");
+    onChange(listener: (newValue: unknown) => void) {
+        if(!this.proxyHandler) {
+            throw new Error("TODO");
+        }
+        else {
+            this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
+        }
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+        if(!this.proxyHandler) {
+            throw new Error("TODO");
+        }
+        else {
+            this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
+        }
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedPropertyRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.key === other.key && this.value === other.value;
     }
 }
 

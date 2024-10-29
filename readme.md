@@ -25,7 +25,7 @@ const MyComponent = WatchedComponent((props) => {
 
     return <div>
         Counter is: {state.myDeep.counter}
-        <Button onclick={state.myDeep.counter++ /* will trigger a rerender */}/>
+      <button onClick={ () => state.myDeep.counter++ /* will trigger a rerender */ }>Increase counter</button>
     </div>
 });
 
