@@ -1,48 +1,59 @@
-# React Deepwatch - no more setState!
+# React Deepwatch - no more setState and less
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!!!!  
 **!!!! Concept code. Not yet working. Greetings to Brillout and aleclarson !!!!**  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-**Watches** your **state**-object **and** also your **props** **deeply** for changes **and re-renders** your component automatically.
+**Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write less code 😊.
 - **Performance friendly**  
-  React Deepwatch uses proxies to watch only for those properties that are actually **used** in your component function, meaning, it records when it makes a read.
+  React Deepwatch uses recursive [proxies](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
-  Theoretically, if a property in props points to your **model**, a change there will also trigger a re-render.
-  _The react paradigm says that props are read only but that means only the first level and not your model._
+  If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#usewatched) ;)
 
+# Install
+````bash
+npm install --save react-deepwatch
+````
 
 # Usage
+## no more setState
 ````jsx
+import {WatchedComponent, useWatched, useWatchedState} from "react-deepwatch"
+          
 const MyComponent = WatchedComponent((props) => {
     const state = useWatchedState({myDeep: {counter: 0, b: 2}});
 
     return <div>
         Counter is: {state.myDeep.counter}
-        <Button onclick={state.myDeep.counter++}/>
+        <Button onclick={state.myDeep.counter++ /* will trigger a rerender */}/>
     </div>
 });
 
 <MyComponent/> // Use MyComponent
 ````
 
-# Another handy utitily: load()
-Now that we already have the ability to deeply record our reads, let's there's also a way to cut away our boilerplate code for `useEffect`  
-## Usage
+## and less... loading code
+Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
+
 ````jsx
+import {WatchedComponent, load} from "react-deepwatch"
+
 const MyComponent = WatchedComponent((props) => {
-    const state = useWatchedState({myDeep: {counter: 0, b: 2}});
 
     return <div>
-        <span>Here's something fetched from the Server: {load(() => fetchFromServer(state.myDeep.counter))} </span>
-        <Button onclick={state.myDeep.counter++}/>
+        Here's something fetched from the Server: { load(() => myFetchFromServer(props.myProperty)) }
     </div>
 });
 
 <MyComponent/> // Use MyComponent
 ````
-**It re-executes `fetchFromServer` when a dependent value changes**. That means, it records all reads from previously in your component function plus reads immediately inside the `load(...)` call. _Here: state.myDeep.counter_   
-The returned Promise is awaited and the component will be put into suspense automatically.
+**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
+The returned Promise will be await'ed and the component will be put into suspense that long.  
+_👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎_
 
-#Example
-[On github](https://github.com/bogeeee/react-deepwatch/tree/1.x/example) or  [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=MembraceDb%20example&file=index.ts). _Not working with StackBlitz on Firefox currently. Ignore the ever-spinning "Installing dependencies"._ 
+#Playground
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=MembraceDb%20example&file=index.ts). _Not working with StackBlitz on Firefox currently. Ignore the ever-spinning "Installing dependencies"._
+
+#Further notes
+### useWatched
+You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props and state into your component function._
