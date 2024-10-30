@@ -7,6 +7,13 @@ function renderCounter(msg: string) {
     return <div><i>Rendercounter: {state.counter++}</i> - {msg}<br/><br/></div>
 }
 
+function useUtil() {
+    const globalObj = {
+        counter: 0
+    }
+    return {globalObj,  globalObjCtl: <div><button onClick={ () => globalObj.counter++} >globalObj: Increase counter</button></div>}
+}
+
 
 const BasicCounter = WatchedComponent((props) => {
     const state = useWatchedState({myDeep: {counter: 0, b: 2}});
@@ -20,9 +27,29 @@ const BasicCounter = WatchedComponent((props) => {
     </div>
 });
 
+const WatchProps = WatchedComponent((props) => {
+    const WatchProps_Child = WatchedComponent((props: {globalObj: any, someOtherProp: boolean}) => {
+        return <div>
+            {renderCounter("should be increased on button click")}
+            <div>Should increase on click: {props.globalObj.counter}</div>
+            <div>Should be true: {"" + props.someOtherProp}</div>
+        </div>
+    });
+
+    const util = useUtil();
+
+    return <div>
+        <h3>WatchProps</h3><i>(needs to watch for **external** changes not through the proxy)</i>
+        {util.globalObjCtl}
+        <WatchProps_Child globalObj={util.globalObj} someOtherProp={true} />
+    </div>
+});
+
 function App(props) {
     return <div>
         <BasicCounter />
+        <hr/>
+        <WatchProps/>
         <hr/>
     </div>
 }
