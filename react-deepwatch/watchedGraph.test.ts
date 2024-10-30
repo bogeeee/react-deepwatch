@@ -187,6 +187,36 @@ describe('ProxiedGraph tests', () => {
 
     })
 
+    test("Readonly props should not cause an error - fails - skipped", ()=> {
+        return; // skip, cause we wont fix this soon
+
+        const orig:{prop: object} = {} as any
+        Object.defineProperty(orig, "prop", {
+            value: {},
+            writable: false
+        })
+
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(orig);
+        expect(proxy.prop).toStrictEqual(orig.prop);
+    })
+
+    test("Readonly props from prototypes should not cause an error", ()=> {
+        class A {
+            prop!: object
+        }
+        Object.defineProperty(A.prototype, "prop", {
+            value: {},
+            writable: false
+        })
+
+        const orig = new A();
+
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(orig);
+        expect(proxy.prop).toStrictEqual(orig.prop);
+    })
+
 });
 
 describe('WatchedGraph tests', () => {

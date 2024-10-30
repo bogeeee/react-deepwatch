@@ -1,6 +1,7 @@
 import {RecordedRead, WatchedGraph} from "./watchedGraph";
 import {throwError} from "./Util";
 import {useState} from "react";
+import {ProxiedGraph} from "./proxiedGraph";
 
 let currentRun: {
     watchedGraph: WatchedGraph,
@@ -27,7 +28,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         }
 
         try {
-            const watchedProps = watchedGraph.getProxyFor(props);
+            const watchedProps = createProxyForProps(watchedGraph, props);
 
             // Install read listener:
             let readListener = (read: RecordedRead)  => {
@@ -62,6 +63,8 @@ function useWatched<T extends object>(obj: T): T {
 }
 
 export function useWatchedState(initial: object) {
+    currentRun || throwError("useWatchedState is not used from inside a WatchedComponent");
+
     const [state]  = useState(initial);
     return useWatched(state);
 }
@@ -85,4 +88,23 @@ function load<T>(loader: () => Promise<T>): T {
     // TODO: Also add the result to the watched props, and record, if something actually reads it later. Only then a reload is needed.
     //  TODO: Test that ignoring the result won't trigger a reload then. It is like an effect.
     return undefined as T;
+}
+
+/**
+ * graph.createProxyFor(props) errors when props's readonly properties are accessed.
+ * So instead, this functions does not proxy the **whole** props but each prop individually
+ * @param graph
+ * @param props
+ */
+function createProxyForProps<P extends object>(graph: WatchedGraph, props: P): P {
+    const result = {}
+    Object.keys(props).forEach(key => {
+        //@ts-ignore
+        const value = props[key];
+        Object.defineProperty(result, key,  {
+            value: (value!= null && typeof value === "object")?graph.getProxyFor(value):value,
+            writable: false
+        })
+    })
+    return result as P;
 }

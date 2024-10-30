@@ -52,8 +52,8 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         this.graph = graph;
 
         // Create proxy:
-        //const targetForProxy = {}; // Don't do. Only giving it the real target preserves Object.key and instanceof behaviour
-        const targetForProxy=target
+        //const targetForProxy = {}; // The virtual way
+        const targetForProxy=target // Preserves Object.keys and instanceof behaviour :), iterators and other stuff. But the downside with this is, that it does not allow to proxy read only properties
         this.proxy = new Proxy(targetForProxy, this);
     }
 
@@ -77,6 +77,16 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         }
 
         if(value != null && typeof value === "object") {
+            const descriptor = Object.getOwnPropertyDescriptor(this.target, p);
+
+            // Handle read-only property:
+            if(descriptor !== undefined && !descriptor.writable) {
+                // The js runtime would prevent us from returning a proxy :( Pretty mean :(
+                throw new Error("Cannot proxy a read-only property. This is not implemented."); // TODO: Implement the virtual way (see constructor)
+                //Try to crack up the target:
+                //Object.defineProperty(this.target, p, {...descriptor, writable: true}); // Redefine property: Does not work
+            }
+
             return this.graph.getProxyFor(value);
         }
 
