@@ -34,30 +34,34 @@ class CurrentRun {
      * Increased, when we see a load(...) call
      */
     loadCallIndex = 0;
+
+    cleanUpFns: (()=>void)[] = [];
+    cleanUp() {
+        this.cleanUpFns.forEach(c => c()); // Clean the listeners
+    }
+
     reRender: () => void
 
-    constructor(persentent: WatchedComponentPersistent, reRender: () => void) {
-        this.persistent = persentent
+    constructor(persistent: WatchedComponentPersistent, reRender: () => void) {
+        this.persistent = persistent
         this.reRender = reRender;
     }
 }
-let currentRun: CurrentRun| undefined;
+let globalCurrentRun: CurrentRun| undefined;
 
 export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any) {
     return (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
 
-        currentRun === undefined || throwError("Illegal state: already in currentRun");
-
-        const cleanListenerFns: (()=>void)[] = [];
+        globalCurrentRun === undefined || throwError("Illegal state: already in globalCurrentRun");
+        const currentRun = globalCurrentRun = new CurrentRun(persistent, reRender);
 
         function reRender() {
-            cleanListenerFns.forEach(c => c()); // Clean the listeners // TODO: use useEffect with cleanup instead.
+            currentRun.cleanUp();
             setRenderCounter(renderCounter+1);
         }
 
-        currentRun = new CurrentRun(persistent, reRender);
 
         try {
             const watchedProps = createProxyForProps(currentRun.watchedGraph, props);
@@ -66,16 +70,16 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             let readListener = (read: RecordedRead)  => {
                 // Re-render on a change of the read value:
                 const changeListener = (newValue: unknown) => {
-                    if(currentRun) {
+                    if(globalCurrentRun) {
                         throw new Error("You must not modify a watched object during the render run.");
                     }
                     reRender();
                 }
                 read.onChange(changeListener);
-                cleanListenerFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
-                currentRun!.recordedReads.push(read);
+                currentRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+                currentRun.recordedReads.push(read);
             };
-            currentRun!.watchedGraph.onAfterRead(readListener)
+            currentRun.watchedGraph.onAfterRead(readListener)
 
             try {
                 return componentFn(watchedProps); // Run the user's component function
@@ -91,22 +95,23 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 }
             }
             finally {
-                currentRun!.watchedGraph.offAfterRead(readListener);
+                currentRun.watchedGraph.offAfterRead(readListener);
             }
         }
         finally {
-            currentRun = undefined;
+            currentRun.recordedReads = []; // currentRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
+            globalCurrentRun = undefined;
         }
     }
 }
 
 function useWatched<T extends object>(obj: T): T {
-    currentRun || throwError("useWatched is not used from inside a WatchedComponent");
-    return currentRun!.watchedGraph.getProxyFor(obj);
+    globalCurrentRun || throwError("useWatched is not used from inside a WatchedComponent");
+    return globalCurrentRun!.watchedGraph.getProxyFor(obj);
 }
 
 export function useWatchedState(initial: object) {
-    currentRun || throwError("useWatchedState is not used from inside a WatchedComponent");
+    globalCurrentRun || throwError("useWatchedState is not used from inside a WatchedComponent");
 
     const [state]  = useState(initial);
     return useWatched(state);
@@ -131,16 +136,16 @@ export function load<T>(loaderFn: () => Promise<T>): T {
 
     // Validity checks:
     typeof loaderFn === "function" || throwError("loader is not a function");
-    if(currentRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
+    if(globalCurrentRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
-    const loadCallIndex = currentRun!.loadCallIndex;
+    const currentRun = globalCurrentRun;
+
+    const loadCallIndex = currentRun.loadCallIndex;
 
     /**
      * Can we use the result from previous / last call ?
      */
     function canReusePreviousResult() {
-        if(currentRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
-
         if(!(loadCallIndex < currentRun.persistent.loadCalls.length)) { // call was not recorded previously ?
             return false;
         }
@@ -162,6 +167,18 @@ export function load<T>(loaderFn: () => Promise<T>): T {
         currentRun.recordedReads = [];
         currentRun.loadCallIndex++;
 
+        previousCall.recordedReadsInsideLoaderFn.forEach(read => {
+            // Re-render on a change of the read value:
+            const changeListener = (newValue: unknown) => {
+                if(globalCurrentRun) {
+                    throw new Error("You must not modify a watched object during the render run.");
+                }
+                currentRun.reRender();
+            }
+            read.onChange(changeListener);
+            currentRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+        })
+
         // return proxy'ed result from previous call:
         let result = previousCall.result
         if(result !== null && typeof result === "object") {
@@ -176,11 +193,9 @@ export function load<T>(loaderFn: () => Promise<T>): T {
         currentRun.persistent.loadCalls = currentRun.persistent.loadCalls.slice(0, loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
 
         let loadCall = new RecordedLoadCall();
-        loadCall.recordedReadsBefore = currentRun.recordedReads;
-        currentRun.recordedReads = []; // pop and remember the reads so far before the loaderFn
+        loadCall.recordedReadsBefore = currentRun.recordedReads; currentRun.recordedReads = []; // pop and remember the reads so far before the loaderFn
         const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
-        loadCall.recordedReadsInsideLoaderFn = currentRun.recordedReads;
-        currentRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
+        loadCall.recordedReadsInsideLoaderFn = currentRun.recordedReads;  currentRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
         const persistent = currentRun.persistent;
         resultPromise.then((result: unknown) => { // Loaded successfully
