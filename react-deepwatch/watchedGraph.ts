@@ -1,5 +1,5 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
-import {MapSet} from "./Util";
+import {arraysAreEqualsByPredicateFn, MapSet} from "./Util";
 import _ from "underscore"
 
 export type ObjKey = string | symbol;
@@ -9,7 +9,9 @@ type AfterWriteListener = (value: unknown) => void;
 
 
 export abstract class RecordedRead {
-    abstract equals(other: RecordedRead): void;
+    abstract equals(other: RecordedRead): boolean;
+
+    abstract get isChanged(): boolean;
 
     abstract onChange(listener: (newValue: unknown) => void): void;
 
@@ -28,6 +30,11 @@ export class RecordedPropertyRead extends RecordedRead{
 
     constructor() {
         super();
+    }
+
+    get isChanged() {
+        //@ts-ignore
+        return this.obj[this.key] !== this.value;
     }
 
     onChange(listener: (newValue: unknown) => void) {
