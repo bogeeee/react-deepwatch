@@ -23,28 +23,45 @@ class WatchedComponentPersistent {
 }
 
 class RenderRun {
+    protected doReRender: () => void
+
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
         // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
         return watchedGraph || (watchedGraph = new WatchedGraph()); // Lazy initialize global variable
     }
+
     recordedReads: RecordedRead[] = [];
+
     persistent: WatchedComponentPersistent;
+
     /**
      * Increased, when we see a load(...) call
      */
     loadCallIndex = 0;
 
+    cleanedUp = false;
+
     cleanUpFns: (()=>void)[] = [];
     cleanUp() {
         this.cleanUpFns.forEach(c => c()); // Clean the listeners
+        this.cleanedUp = true;
     }
 
-    reRender: () => void
+    /**
+     * A changed dependency can also be a loading value that just finished loading
+     */
+    handleChangedDependency() {
+        if(this.cleanedUp) {
+            throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
+        }
+        this.cleanUp();
+        this.doReRender();
+    }
 
     constructor(persistent: WatchedComponentPersistent, reRender: () => void) {
         this.persistent = persistent
-        this.reRender = reRender;
+        this.doReRender = reRender;
     }
 }
 let currentRenderRun: RenderRun| undefined;
@@ -54,14 +71,9 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
 
+        // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
-        const renderRun = currentRenderRun = new RenderRun(persistent, reRender);
-
-        function reRender() {
-            renderRun.cleanUp();
-            setRenderCounter(renderCounter+1);
-        }
-
+        const renderRun = currentRenderRun = new RenderRun(persistent, () => setRenderCounter(renderCounter+1));
 
         try {
             const watchedProps = createProxyForProps(renderRun.watchedGraph, props);
@@ -73,7 +85,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     if(currentRenderRun) {
                         throw new Error("You must not modify a watched object during the render run.");
                     }
-                    reRender();
+                    renderRun.handleChangedDependency();
                 }
                 read.onChange(changeListener);
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
@@ -87,7 +99,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             catch (e) {
                 if(e instanceof Promise) { // TODO: better check / better signal
                     // Quick and dirty handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                    e.then(result => {reRender()})
+                    e.then(result => {renderRun.handleChangedDependency()})
                     return "...loading..."; // TODO: return loader
                 }
                 else {
@@ -173,7 +185,7 @@ export function load<T>(loaderFn: () => Promise<T>): T {
                 if(currentRenderRun) {
                     throw new Error("You must not modify a watched object during the render run.");
                 }
-                renderRun.reRender();
+                renderRun.handleChangedDependency();
             }
             read.onChange(changeListener);
             renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
