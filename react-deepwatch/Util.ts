@@ -47,4 +47,4 @@ export function arraysAreEqualsByPredicateFn<A, B>(a: A[], b: B[], equalsFn: (a:
     }
     return true;
 }
-
+export type PromiseState<T> = {state: "pending", promise: Promise<T>} | {state: "resolved", resolvedValue: T} | {state: "rejected", rejectReason: any};

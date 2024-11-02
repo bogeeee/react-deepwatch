@@ -1,5 +1,5 @@
 import {RecordedRead, recordedReadsArraysAreEqual, WatchedGraph} from "./watchedGraph";
-import {arraysAreEqualsByPredicateFn, throwError} from "./Util";
+import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useState} from "react";
 import {ProxiedGraph} from "./proxiedGraph";
 
@@ -12,7 +12,7 @@ class RecordedLoadCall {
     recordedReadsBefore!: RecordedRead[];
     recordedReadsInsideLoaderFn!: RecordedRead[];
 
-    result: unknown
+    result!: PromiseState<unknown>;
 }
 
 /**
@@ -143,84 +143,121 @@ function useLoad<T>(loader: () => Promise<T>): T {
     return undefined as T;
 }
 
+type LoadOptions<T> = {
+    /**
+     * If you specify a placeholder, the component can be immediately rendered during loading.
+     * <p>
+     * undefined = undefined as placeholder.
+     * </p>
+     * <p>
+     * This runs subsequent loads in parallel. But if the loaded value turns out to be different than the placeholder, they will be re-run, because they might depend on it.
+     * </p>
+     */
+    placeHolder?: T
 
-export function load<T>(loaderFn: () => Promise<T>): T {
+    /**
+     * Poll after this amount of milliseconds
+     */
+    poll?: number
+}
+
+export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}): T {
 
     // Validity checks:
-    typeof loaderFn === "function" || throwError("loader is not a function");
+    typeof loaderFn === "function" || throwError("loaderFn is not a function");
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
     const renderRun = currentRenderRun;
+    try {
 
-    const loadCallIndex = renderRun.loadCallIndex;
-
-    /**
-     * Can we use the result from previous / last call ?
-     */
-    function canReusePreviousResult() {
-        if(!(loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded previously ?
-            return false;
-        }
-        const previousLoadCall = renderRun.persistent.loadCalls[loadCallIndex];
-
-        if(!recordedReadsArraysAreEqual(renderRun.recordedReads, previousLoadCall.recordedReadsBefore)) {
-            return false;
-        }
-
-        if(previousLoadCall.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
-            return false;
-        }
-
-        return true;
-    }
-
-    if(canReusePreviousResult()) {
-        const previousCall = renderRun.persistent.loadCalls[loadCallIndex];
-        renderRun.recordedReads = [];
-        renderRun.loadCallIndex++;
-
-        previousCall.recordedReadsInsideLoaderFn.forEach(read => {
-            // Re-render on a change of the read value:
-            const changeListener = (newValue: unknown) => {
-                if(currentRenderRun) {
-                    throw new Error("You must not modify a watched object during the render run.");
-                }
-                renderRun.handleChangedDependency();
+        /**
+         * Can we use the result from previous / last call ?
+         */
+        const canReusePreviousResult = () => {
+            if (!(renderRun.loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded previously ?
+                return false;
             }
-            read.onChange(changeListener);
-            renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
-        })
+            const previousLoadCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
 
-        // return proxy'ed result from previous call:
-        let result = previousCall.result
-        if(result !== null && typeof result === "object") {
-            result = renderRun.watchedGraph.getProxyFor(result); // Record the reads inside the result as well
+            if (!recordedReadsArraysAreEqual(renderRun.recordedReads, previousLoadCall.recordedReadsBefore)) {
+                return false;
+            }
+
+            if (previousLoadCall.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+                return false;
+            }
+
+            if (previousLoadCall.result.state === "resolved") {
+                return {result: previousLoadCall.result.resolvedValue}
+            }
+            if (previousLoadCall.result.state === "pending") {
+                if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
+                    return {result: options.placeHolder};
+                }
+                throw previousLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
+            } else if (previousLoadCall.result.state === "rejected") {
+                return false; // Try again
+            } else {
+                throw new Error("Invalid state of previousLoadCall.result.state")
+            }
         }
-        return result as T;
+
+        const canReuse = canReusePreviousResult();
+        if (canReuse !== false) {
+            const previousCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
+            renderRun.recordedReads = [];
+
+            previousCall.recordedReadsInsideLoaderFn.forEach(read => {
+                // Re-render on a change of the read value:
+                const changeListener = (newValue: unknown) => {
+                    if (currentRenderRun) {
+                        throw new Error("You must not modify a watched object during the render run.");
+                    }
+                    renderRun.handleChangedDependency();
+                }
+                read.onChange(changeListener);
+                renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+            })
+
+            // return proxy'ed result from previous call:
+            let result = canReuse.result
+            if (result !== null && typeof result === "object") {
+                result = renderRun.watchedGraph.getProxyFor(result); // Record the reads inside the result as well
+            }
+            return result as T;
+        }
+        // TODO: introduce third case. Can re-use but still loading
+        else { // cannot use previous result ?
+            // *** make a call / exec loaderFn ***:
+
+            renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
+
+            let loadCall = new RecordedLoadCall();
+
+            loadCall.recordedReadsBefore = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the reads so far before the loaderFn
+            const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
+            loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
+
+            resultPromise.then((value) => {
+                loadCall.result = {state: "resolved", resolvedValue: value}
+            })
+            resultPromise.catch(reason => {
+                loadCall.result = {state: "rejected", rejectReason: reason}
+                // TODO: set component to error state
+            })
+            loadCall.result = {state: "pending", promise: resultPromise};
+
+            renderRun.persistent.loadCalls.push(loadCall);
+
+            if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
+                return options.placeHolder as T;
+            }
+
+            throw resultPromise; // Throwing a promise will put the react component into suspense state
+        }
     }
-    // TODO: introduce third case. Can re-use but still loading
-    else { // cannot use previous result ?
-        // *** make a call / exec loaderFn ***:
-
-        renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
-
-        let loadCall = new RecordedLoadCall();
-        loadCall.recordedReadsBefore = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the reads so far before the loaderFn
-        const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
-        loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads;  renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
-
-        const persistent = renderRun.persistent;
-        resultPromise.then((result: unknown) => { // Loaded successfully
-            loadCall.result = result;
-            persistent.loadCalls.push(loadCall); // Should not modify it asynchronously. Will be buggy if rerender is triggered in the meanwhile. TODO: implement third case: Can re-use but still loading
-        });
-
-        resultPromise.catch((reason) => {
-            throw reason;
-            // TODO: set component to error state
-        })
-
-        throw resultPromise; // Throwing a promise will put the react component into suspense state
+    finally {
+        renderRun.loadCallIndex++;
     }
 }
 
