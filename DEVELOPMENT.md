@@ -13,8 +13,9 @@ cd react-deepwatch
 npm run test
 ```
 
-### Run the dev playground
+### Run the web based (manual) tests
 ```bash
 cd devPlayground
 npm intall
-npm run dev
+npm run tests:web:prepare
+npm run tests:web
