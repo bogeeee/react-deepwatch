@@ -16,6 +16,21 @@ function useUtil() {
     return {globalObj,  globalObjCtl: <div><button onClick={ () => globalObj.counter++} >globalObj: Increase counter</button></div>}
 }
 
+function delayed(fn: () => unknown, delay = 1000) {
+    return async () => {
+        const result = await fn();
+        if(delay === 0) {
+            return result;
+        }
+
+        return await new Promise((resolve, reject) => {
+            setTimeout(() => {
+                resolve(result);
+            }, delay);
+        })
+    }
+}
+
 
 const BasicCounter = WatchedComponent((props) => {
     const state = useWatchedState({myDeep: {counter: 0, b: 2}});
@@ -67,19 +82,25 @@ let ShouldReLoadIfStateChanges_fetchCounter = 0;
 let ShouldReLoadIfStateChanges_fetchCounter2 = 0;
 
 const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
-    const state = useWatchedState({counter1: 0, counter2:0});
+    const state = useWatchedState({
+        counter1: 0,
+        counter2:0,
+        withDelay: true,
+    });
 
     return <div>
         <h3>ShouldReLoadIfStateChanges</h3>
-        {renderCounter("should be increased on button click")}
+        {renderCounter("should be increased by 3 on button click")}
         <div>counter1: {state.counter1}</div>
         {/* Dont display counter2: we don't want to trigger refreshes on changes this way but want to see, if changes cause re executing the loader */}
 
-        <div>Retrieve counter1 dependant: {load( async () => { return `counter: ${state.counter1}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter} times - should increase on button 1 only`})}</div>
-        <div>Retrieve counter2 dependant: {load( async () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`})}</div>
+        <div>Retrieve counter1 dependant: {load( delayed( () => { return `counter: ${state.counter1}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter} times - should increase on button 1 only`},state.withDelay?1000:0), {placeHolder: "Loading"})}</div>
+        <div>Retrieve counter2 dependant: {load( delayed( () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`}, state.withDelay?500:0), {placeHolder: "Loading2"})}</div>
 
         <button onClick={ () => state.counter1++} >1: Increase counter1</button><br/>
-        <button onClick={ () => state.counter2++} >2: Increase counter2</button>
+        <button onClick={ () => state.counter2++} >2: Increase counter2</button><br/>
+        <input type="checkbox" checked={state.withDelay} onChange={(event) => {
+            state.withDelay = event.target.checked}} />with delay
     </div>
 });
 
