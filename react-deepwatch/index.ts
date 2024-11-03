@@ -5,6 +5,19 @@ import {ProxiedGraph} from "./proxiedGraph";
 
 let watchedGraph: WatchedGraph | undefined
 
+type WatchedComponentOptions = {
+
+    /**
+     * Everything that's **taken** from props, {@link useWatchedState} or {@link watched} will be returned, wrapped in a proxy that watches for modifications.
+     * So far, so good, this can handle all stuff that's happening inside your component, but the outside world does not have these proxies. For example, the parent component, that passed in an object (i.e. the model) into this component via props.
+     * Therefore this component can also **patch** these objects to make them watchable. I.e. it defines setters for properties or replaces the push method for an array instance.
+     *
+     *
+     * <p>Default: true</p>
+     */
+    watchExternalModifications: boolean
+}
+
 class RecordedLoadCall {
     /**
      * From the beginning or previous load call up to this one
@@ -20,10 +33,26 @@ class RecordedLoadCall {
  */
 class WatchedComponentPersistent {
     loadCalls: RecordedLoadCall[] = [];
+    doReRender!: () => void
+    /**
+     * RenderRun, when component is currently rendering or beeing displayed
+     * Promise, when something is loading and component is in suspense
+     * Error when errored
+     */
+    state!: RenderRun | Promise<unknown> | Error
+
+    handleLoadingFinished() {
+        if(this.state instanceof RenderRun) {
+            this.state.cleanUp();
+            this.doReRender();
+        }
+        else {
+            this.doReRender();
+        }
+    }
 }
 
 class RenderRun {
-    protected doReRender: () => void
 
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
@@ -43,25 +72,22 @@ class RenderRun {
     cleanedUp = false;
 
     cleanUpFns: (()=>void)[] = [];
+
     cleanUp() {
         this.cleanUpFns.forEach(c => c()); // Clean the listeners
         this.cleanedUp = true;
     }
 
-    /**
-     * A changed dependency can also be a loading value that just finished loading
-     */
-    handleChangedDependency() {
+    handleWatchedPropertyChange() {
         if(this.cleanedUp) {
             throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
         }
         this.cleanUp();
-        this.doReRender();
+        this.persistent.doReRender();
     }
 
-    constructor(persistent: WatchedComponentPersistent, reRender: () => void) {
+    constructor(persistent: WatchedComponentPersistent) {
         this.persistent = persistent
-        this.doReRender = reRender;
     }
 }
 let currentRenderRun: RenderRun| undefined;
@@ -70,10 +96,11 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
     return (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
+        persistent.doReRender = () => setRenderCounter(renderCounter+1);
 
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
-        const renderRun = currentRenderRun = new RenderRun(persistent, () => setRenderCounter(renderCounter+1));
+        const renderRun = currentRenderRun = new RenderRun(persistent);
 
         try {
             const watchedProps = createProxyForProps(renderRun.watchedGraph, props);
@@ -85,7 +112,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     if(currentRenderRun) {
                         throw new Error("You must not modify a watched object during the render run.");
                     }
-                    renderRun.handleChangedDependency();
+                    renderRun.handleWatchedPropertyChange();
                 }
                 read.onChange(changeListener);
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
@@ -97,9 +124,11 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 return componentFn(watchedProps); // Run the user's component function
             }
             catch (e) {
+                renderRun.cleanUp();
                 if(e instanceof Promise) { // TODO: better check / better signal
+                    persistent.state = e;
                     // Quick and dirty handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                    e.then(result => {renderRun.handleChangedDependency()})
+                    e.then(result => {persistent.handleLoadingFinished()})
                     return "...loading..."; // TODO: return loader
                 }
                 else {
@@ -117,8 +146,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
     }
 }
 
-function useWatched<T extends object>(obj: T): T {
-    currentRenderRun || throwError("useWatched is not used from inside a WatchedComponent");
+function watched<T extends object>(obj: T): T {
+    currentRenderRun || throwError("watched is not used from inside a WatchedComponent");
     return currentRenderRun!.watchedGraph.getProxyFor(obj);
 }
 
@@ -126,7 +155,7 @@ export function useWatchedState(initial: object) {
     currentRenderRun || throwError("useWatchedState is not used from inside a WatchedComponent");
 
     const [state]  = useState(initial);
-    return useWatched(state);
+    return watched(state);
 }
 
 /**
@@ -168,6 +197,8 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
     const renderRun = currentRenderRun;
+    const watched = (value: unknown) => (value !== null && typeof value === "object")?renderRun.watchedGraph.getProxyFor(value):value;
+
     try {
 
         /**
@@ -213,20 +244,14 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                     if (currentRenderRun) {
                         throw new Error("You must not modify a watched object during the render run.");
                     }
-                    renderRun.handleChangedDependency();
+                    renderRun.handleWatchedPropertyChange();
                 }
                 read.onChange(changeListener);
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
             })
 
-            // return proxy'ed result from previous call:
-            let result = canReuse.result
-            if (result !== null && typeof result === "object") {
-                result = renderRun.watchedGraph.getProxyFor(result); // Record the reads inside the result as well
-            }
-            return result as T;
+            return watched(canReuse.result) as T; // return proxy'ed result from previous call:
         }
-        // TODO: introduce third case. Can re-use but still loading
         else { // cannot use previous result ?
             // *** make a call / exec loaderFn ***:
 
@@ -250,7 +275,12 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             renderRun.persistent.loadCalls.push(loadCall);
 
             if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
-                return options.placeHolder as T;
+                loadCall.result.promise.then((result) => {
+                    //TODO: for primitives: No need to rerender: if(result === options.placeHolder) return options.placeHolder;
+                    renderRun.persistent.handleLoadingFinished();
+                    return watched(result) as T;
+                })
+                return watched(options.placeHolder) as T;
             }
 
             throw resultPromise; // Throwing a promise will put the react component into suspense state
