@@ -277,8 +277,12 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
                 loadCall.result.promise.then((result) => {
                     //TODO: for primitives: No need to rerender: if(result === options.placeHolder) return options.placeHolder;
-                    renderRun.persistent.handleLoadingFinished();
-                    return watched(result) as T;
+                    if(result === null || (!typeof result === "object") && result === options.placeHolder) { // Result is primitive and same as placeholder ?
+                        // Do nothing because the placeholder is already displayed
+                    }
+                    else {
+                        renderRun.persistent.handleLoadingFinished();
+                    }
                 })
                 return watched(options.placeHolder) as T;
             }
