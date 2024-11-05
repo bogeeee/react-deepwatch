@@ -191,11 +191,15 @@ type LoadOptions<T> = {
 }
 
 export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}): T {
+    // Wording:
+    // - "previous" means: load(...) statements more upwards in the user's code
+    // - "last" means: this load call but from a past render run.
 
     // Validity checks:
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
+    const hasPlaceHolder = options.hasOwnProperty("placeHolder"); // TODO: check for inherited property as well
     const renderRun = currentRenderRun;
     const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
 
@@ -230,7 +234,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                 return {result: lastLoadCall.result.resolvedValue}
             }
             if (lastLoadCall.result.state === "pending") {
-                if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
+                if (hasPlaceHolder) { // Placeholder specified ?
                     return {result: options.placeHolder};
                 }
                 throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
@@ -242,7 +246,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         }
 
         const canReuse = canReusePreviousResult();
-        if (canReuse !== false) {
+        if (canReuse !== false) { // can re-use ?
             const lastCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
 
             lastCall.recordedReadsInsideLoaderFn.forEach(read => {
@@ -281,9 +285,8 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
             renderRun.persistent.loadCalls.push(loadCall);
 
-            if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
+            if (hasPlaceHolder) { // Placeholder specified ?
                 loadCall.result.promise.then((result) => {
-                    //TODO: for primitives: No need to rerender: if(result === options.placeHolder) return options.placeHolder;
                     if(result === null || (!(typeof result === "object")) && result === options.placeHolder) { // Result is primitive and same as placeholder ?
                         // Do nothing because the placeholder is already displayed
                     }
