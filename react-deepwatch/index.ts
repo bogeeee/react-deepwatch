@@ -239,7 +239,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         /**
          * Can we use the result from last call ?
          */
-        const canReusePreviousResult = () => {
+        const canReuseLastResult = () => {
             if (!(renderRun.loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded last render ?
                 return false;
             }
@@ -269,7 +269,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             }
         }
 
-        const canReuse = canReusePreviousResult();
+        const canReuse = canReuseLastResult();
         if (canReuse !== false) { // can re-use ?
             const lastCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
 
