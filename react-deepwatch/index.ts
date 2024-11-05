@@ -197,9 +197,17 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
     const renderRun = currentRenderRun;
-    const watched = (value: unknown) => (value !== null && typeof value === "object")?renderRun.watchedGraph.getProxyFor(value):value;
+    const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
 
     try {
+        let result = inner();
+        return watched(result);
+    }
+    finally {
+        renderRun.loadCallIndex++;
+    }
+
+    function inner()  {
 
         /**
          * Can we use the result from last call ?
@@ -210,7 +218,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             }
             const lastLoadCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
 
-            if (!recordedReadsArraysAreEqual(renderRun.recordedReads, lastLoadCall.recordedReadsBefore)) {
+            if (!recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadCall.recordedReadsBefore)) {
                 return false;
             }
 
@@ -236,7 +244,6 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         const canReuse = canReusePreviousResult();
         if (canReuse !== false) {
             const lastCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
-            renderRun.recordedReads = [];
 
             lastCall.recordedReadsInsideLoaderFn.forEach(read => {
                 // Re-render on a change of the read value:
@@ -250,7 +257,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
             })
 
-            return watched(canReuse.result) as T; // return proxy'ed result from last call:
+            return canReuse.result as T; // return proxy'ed result from last call:
         }
         else { // cannot use last result ?
             // *** make a call / exec loaderFn ***:
@@ -259,7 +266,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
             let loadCall = new RecordedLoadCall();
 
-            loadCall.recordedReadsBefore = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the reads so far before the loaderFn
+            loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
@@ -277,22 +284,21 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
                 loadCall.result.promise.then((result) => {
                     //TODO: for primitives: No need to rerender: if(result === options.placeHolder) return options.placeHolder;
-                    if(result === null || (!typeof result === "object") && result === options.placeHolder) { // Result is primitive and same as placeholder ?
+                    if(result === null || (!(typeof result === "object")) && result === options.placeHolder) { // Result is primitive and same as placeholder ?
                         // Do nothing because the placeholder is already displayed
                     }
                     else {
                         renderRun.persistent.handleLoadingFinished();
                     }
                 })
-                return watched(options.placeHolder) as T;
+                return options.placeHolder as T;
             }
 
             throw resultPromise; // Throwing a promise will put the react component into suspense state
         }
     }
-    finally {
-        renderRun.loadCallIndex++;
-    }
+
+    function watched(value: T) { return (value !== null && typeof value === "object")?renderRun.watchedGraph.getProxyFor(value):value }
 }
 
 /**
