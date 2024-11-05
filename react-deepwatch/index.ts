@@ -1,4 +1,4 @@
-import {RecordedRead, recordedReadsArraysAreEqual, WatchedGraph} from "./watchedGraph";
+import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useState} from "react";
 import {ProxiedGraph} from "./proxiedGraph";
@@ -68,6 +68,11 @@ class RenderRun {
      * Increased, when we see a load(...) call
      */
     loadCallIndex = 0;
+
+    /**
+     * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
+     */
+    somePending?: Promise<unknown>;
 
     cleanedUp = false;
 
@@ -178,9 +183,6 @@ type LoadOptions<T> = {
      * <p>
      * undefined = undefined as placeholder.
      * </p>
-     * <p>
-     * This runs subsequent loads in parallel. But if the loaded value turns out to be different than the placeholder, they will be re-run, because they might depend on it.
-     * </p>
      */
     placeHolder?: T
 
@@ -255,6 +257,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                 return {result: lastLoadCall.result.resolvedValue}
             }
             if (lastLoadCall.result.state === "pending") {
+                renderRun.somePending = lastLoadCall.result.promise;
                 if (hasPlaceHolder) { // Placeholder specified ?
                     return {result: options.placeHolder};
                 }
@@ -289,6 +292,16 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
             renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
 
+            if(renderRun.somePending) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
+                // don't make a new call
+                if(hasPlaceHolder) {
+                    return options.placeHolder;
+                }
+                else {
+                    throw renderRun.somePending;
+                }
+            }
+
             let loadCall = new RecordedLoadCall();
 
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
@@ -305,6 +318,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             loadCall.result = {state: "pending", promise: resultPromise};
 
             renderRun.persistent.loadCalls.push(loadCall);
+            renderRun.somePending = resultPromise;
 
             if (hasPlaceHolder) { // Placeholder specified ?
                 loadCall.result.promise.then((result) => {
