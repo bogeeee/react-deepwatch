@@ -202,43 +202,43 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
     try {
 
         /**
-         * Can we use the result from previous / last call ?
+         * Can we use the result from last call ?
          */
         const canReusePreviousResult = () => {
-            if (!(renderRun.loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded previously ?
+            if (!(renderRun.loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded last render ?
                 return false;
             }
-            const previousLoadCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
+            const lastLoadCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
 
-            if (!recordedReadsArraysAreEqual(renderRun.recordedReads, previousLoadCall.recordedReadsBefore)) {
-                return false;
-            }
-
-            if (previousLoadCall.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+            if (!recordedReadsArraysAreEqual(renderRun.recordedReads, lastLoadCall.recordedReadsBefore)) {
                 return false;
             }
 
-            if (previousLoadCall.result.state === "resolved") {
-                return {result: previousLoadCall.result.resolvedValue}
+            if (lastLoadCall.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+                return false;
             }
-            if (previousLoadCall.result.state === "pending") {
+
+            if (lastLoadCall.result.state === "resolved") {
+                return {result: lastLoadCall.result.resolvedValue}
+            }
+            if (lastLoadCall.result.state === "pending") {
                 if (options.hasOwnProperty("placeHolder")) { // Placeholder specified ? // TODO: check for inherited property as well
                     return {result: options.placeHolder};
                 }
-                throw previousLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
-            } else if (previousLoadCall.result.state === "rejected") {
+                throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
+            } else if (lastLoadCall.result.state === "rejected") {
                 return false; // Try again
             } else {
-                throw new Error("Invalid state of previousLoadCall.result.state")
+                throw new Error("Invalid state of lastLoadCall.result.state")
             }
         }
 
         const canReuse = canReusePreviousResult();
         if (canReuse !== false) {
-            const previousCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
+            const lastCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
             renderRun.recordedReads = [];
 
-            previousCall.recordedReadsInsideLoaderFn.forEach(read => {
+            lastCall.recordedReadsInsideLoaderFn.forEach(read => {
                 // Re-render on a change of the read value:
                 const changeListener = (newValue: unknown) => {
                     if (currentRenderRun) {
@@ -250,9 +250,9 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
             })
 
-            return watched(canReuse.result) as T; // return proxy'ed result from previous call:
+            return watched(canReuse.result) as T; // return proxy'ed result from last call:
         }
-        else { // cannot use previous result ?
+        else { // cannot use last result ?
             // *** make a call / exec loaderFn ***:
 
             renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
