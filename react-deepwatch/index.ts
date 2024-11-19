@@ -287,23 +287,19 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
             return canReuse.result as T; // return proxy'ed result from last call:
         }
-        else { // cannot use last result ?
-            // *** make a call / exec loaderFn ***:
-
-            renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
-
-            if(renderRun.somePending) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
-                // don't make a new call
-                if(hasPlaceHolder) {
-                    return options.placeHolder;
-                }
-                else {
-                    throw renderRun.somePending;
-                }
+        else if(renderRun.somePending) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
+            // don't make a new call
+            if(hasPlaceHolder) {
+                return options.placeHolder!;
             }
+            else {
+                throw renderRun.somePending;
+            }
+        }
+        else { // cannot use last result ?
+            // *** make a loadCall / exec loaderFn ***:
 
             let loadCall = new RecordedLoadCall();
-
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
@@ -317,7 +313,13 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             })
             loadCall.result = {state: "pending", promise: resultPromise};
 
-            renderRun.persistent.loadCalls.push(loadCall);
+            // Add to renderRun.persistent.loadCalls:
+            if(options.usedInRenderOnly !== true) {
+                renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
+            }
+            renderRun.persistent.loadCalls[renderRun.loadCallIndex] = loadCall; // Replace / add
+
+
             renderRun.somePending = resultPromise;
 
             if (hasPlaceHolder) { // Placeholder specified ?
@@ -329,7 +331,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                         renderRun.persistent.handleLoadingFinished();
                     }
                 })
-                return options.placeHolder as T;
+                return options.placeHolder!;
             }
 
             throw resultPromise; // Throwing a promise will put the react component into suspense state
