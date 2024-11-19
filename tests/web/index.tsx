@@ -104,6 +104,35 @@ const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
     </div>
 });
 
+const itemsFetchCounter: Record<string, number> = {};
+const itemsFetchCounter_incr = (name: string) => itemsFetchCounter[name] = (itemsFetchCounter[name] || 0)+1;
+const MultipleLoadsInALoop = WatchedComponent((props) => {
+    const state = useWatchedState({
+        withPlaceholders: false,
+        usedInRenderOnly: false,
+        items: [{name: "item1", counter:0},{name: "item2", counter:0},{name: "item3", counter:0},{name: "item4", counter:0}]
+    });
+
+    return <div>
+        <h3>MultipleLoadsInALoop</h3>
+        {renderCounter("expected to increase reasonably" )}
+
+        {state.items.map(item => <div key={item.name}>
+            <b>{item.name}</b>&#160;
+            Retrieve item.counter's dependant: {load(
+                delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times`, 500),
+            state.withPlaceholders?{placeHolder: "placeholder", usedInRenderOnly: state.usedInRenderOnly}:{}
+        )}
+            &#160;<button onClick={ () => item.counter++} >Increase items's counter</button>
+        </div>)}
+
+        <input type="checkbox" checked={state.withPlaceholders} onChange={(event) => {
+            state.withPlaceholders = event.target.checked}} />withPlaceholders
+        <input type="checkbox" checked={state.usedInRenderOnly} onChange={(event) => {
+            state.usedInRenderOnly = event.target.checked}} />usedInRenderOnly
+    </div>
+});
+
 
 let ShouldReLoadIfPropsPropertyChanges_fetchCounter = 0;
 const ShouldReLoadIfPropsPropertyChanges_Child = WatchedComponent((props: {myProp:number, myProp2: number}) => {
@@ -135,6 +164,8 @@ function App(props) {
             <WatchProps/>
             <hr/>
             <ShouldReLoadIfStateChanges/>
+            <hr/>
+            <MultipleLoadsInALoop/>
             <hr/>
             <ShouldReLoadIfPropsChange/>
         </Suspense>
