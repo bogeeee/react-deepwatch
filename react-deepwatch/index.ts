@@ -188,7 +188,7 @@ type LoadOptions<T> = {
 
     /**
      * Performance: Marks that the result is used only for rendering or passed to child components. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
-     * That helps to improve performance, as other load calls don't depend on it and may not need a reload and can be run in parallel.
+     * That helps to improve performance, as other load calls don't depend on it, so they may not need a reload and can be run in parallel.
      * <p>
      *     Default: false
      *  </p>
@@ -234,18 +234,24 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         renderRun.loadCallIndex++;
     }
 
+
+
     function inner()  {
+        let lastLoadCall = renderRun.loadCallIndex < renderRun.persistent.loadCalls.length?renderRun.persistent.loadCalls[renderRun.loadCallIndex]:undefined;
+        const recordedReadsAreEqualSinceLastCall = lastLoadCall && recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadCall.recordedReadsBefore)
+        if(!recordedReadsAreEqualSinceLastCall) {
+            renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one).
+            lastLoadCall = undefined;
+        }
 
         /**
          * Can we use the result from last call ?
          */
         const canReuseLastResult = () => {
-            if (!(renderRun.loadCallIndex < renderRun.persistent.loadCalls.length)) { // call was not recorded last render ?
+            if(!lastLoadCall) { // call was not recorded last render or is invalid?
                 return false;
             }
-            const lastLoadCall = renderRun.persistent.loadCalls[renderRun.loadCallIndex];
-
-            if (!recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadCall.recordedReadsBefore)) {
+            if (!recordedReadsAreEqualSinceLastCall) {
                 return false;
             }
 
@@ -313,12 +319,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             })
             loadCall.result = {state: "pending", promise: resultPromise};
 
-            // Add to renderRun.persistent.loadCalls:
-            if(options.usedInRenderOnly !== true) {
-                renderRun.persistent.loadCalls = renderRun.persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one). They can't be re-used because they might also depend on the result of this call (+ eventually if a property changed till here)
-            }
-            renderRun.persistent.loadCalls[renderRun.loadCallIndex] = loadCall; // Replace / add
-
+            renderRun.persistent.loadCalls[renderRun.loadCallIndex] = loadCall; // add / replace
 
             renderRun.somePending = resultPromise;
 
