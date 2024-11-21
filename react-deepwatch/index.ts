@@ -151,12 +151,27 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
     }
 }
 
-function watched<T extends object>(obj: T): T {
+type WatchedOptions = {
+    /**
+     * TODO: Implement
+     * Called, when a deep property was changed through the proxy.
+     */
+    onChange: () => void
+
+    /**
+     * TODO: Implement
+     * Called on a change to one of those properties, that were read-recorded in the component function (through the proxy of course).
+     * Reacts also on external changes / not done through the proxy.
+     */
+    onRecorededChange: () => void
+}
+
+function watched<T extends object>(obj: T, options?: WatchedOptions): T {
     currentRenderRun || throwError("watched is not used from inside a WatchedComponent");
     return currentRenderRun!.watchedGraph.getProxyFor(obj);
 }
 
-export function useWatchedState(initial: object) {
+export function useWatchedState(initial: object, options?: WatchedOptions) {
     currentRenderRun || throwError("useWatchedState is not used from inside a WatchedComponent");
 
     const [state]  = useState(initial);

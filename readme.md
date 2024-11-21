@@ -21,7 +21,7 @@ npm install --save react-deepwatch
 import {WatchedComponent, useWatched, useWatchedState} from "react-deepwatch"
           
 const MyComponent = WatchedComponent((props) => {
-    const state = useWatchedState({myDeep: {counter: 0, b: 2}});
+    const state = useWatchedState({myDeep: {counter: 0, b: 2}}, {/* WatchedOptions (optional) */});
 
     return <div>
         Counter is: {state.myDeep.counter}
@@ -41,7 +41,7 @@ import {WatchedComponent, load} from "react-deepwatch"
 const MyComponent = WatchedComponent((props) => {
 
     return <div>
-        Here's something fetched from the Server: { load(() => myFetchFromServer(props.myProperty)) }
+        Here's something fetched from the Server: { load(() => myFetchFromServer(props.myProperty), {/* LoadOptions (optional) */}) }
     </div>
 });
 
@@ -50,6 +50,11 @@ const MyComponent = WatchedComponent((props) => {
 **`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
 The returned Promise will be await'ed and the component will be put into suspense that long.  
 _👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎_
+
+### Performance optimization for load(...)
+To reduce the number of expensive `myFetchFromServer` calls, try the following:
+- Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
+- See the `LoadOptions#placeholder` and `LoadOptions#usedInRenderOnly` settings. This can allow loading in parallel as well.
 
 #Playground
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=MembraceDb%20example&file=index.ts). _Not working with StackBlitz on Firefox currently. Ignore the ever-spinning "Installing dependencies"._
