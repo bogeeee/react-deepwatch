@@ -54,7 +54,7 @@ _👍 load(...) can be inside a conditional block or a loop. Then it has already
 ### Performance optimization for load(...)
 To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
-- See the `LoadOptions#placeholder` and `LoadOptions#usedInRenderOnly` settings. This can allow loading in parallel as well.
+- See the `LoadOptions#placeholder` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
 
 #Playground
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=MembraceDb%20example&file=index.ts). _Not working with StackBlitz on Firefox currently. Ignore the ever-spinning "Installing dependencies"._

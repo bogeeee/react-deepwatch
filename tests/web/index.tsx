@@ -109,7 +109,7 @@ const itemsFetchCounter_incr = (name: string) => itemsFetchCounter[name] = (item
 const MultipleLoadsInALoop = WatchedComponent((props) => {
     const state = useWatchedState({
         withPlaceholders: false,
-        usedInRenderOnly: false,
+        critical: true,
         globalCounter:0,
         items: [{name: "item1", counter:0},{name: "item2", counter:0},{name: "item3", counter:0},{name: "item4", counter:0}]
     });
@@ -124,17 +124,17 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
                 delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`, 500),
-            state.withPlaceholders?{placeHolder: "placeholder", usedInRenderOnly: state.usedInRenderOnly}:{}
+            state.withPlaceholders?{placeHolder: "placeholder", critical: state.critical}:{}
         )}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button>
         </div>)}
 
         <input type="checkbox" checked={state.withPlaceholders} onChange={(event) => {
             state.withPlaceholders = event.target.checked}} />withPlaceholders
-        <input type="checkbox" checked={state.usedInRenderOnly} onChange={(event) => {
-            state.usedInRenderOnly = event.target.checked}} />usedInRenderOnly
+        <input type="checkbox" checked={state.critical} onChange={(event) => {
+            state.critical = event.target.checked}} />critical
 
-        <br/><button onClick={ () => state.globalCounter++} >Increase globalCounter</button><i>Should load in parallel if the above features are enabled</i>
+        <br/><button onClick={ () => state.globalCounter++} >Increase globalCounter</button><i>Should load in parallel if the above features are flipped</i>
     </div>
 });
 

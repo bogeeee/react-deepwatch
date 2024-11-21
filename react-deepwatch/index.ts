@@ -202,13 +202,13 @@ type LoadOptions<T> = {
     placeHolder?: T
 
     /**
-     * Performance: Marks that the result is used only for rendering or passed to child components. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
-     * That helps to improve performance, as other load calls don't depend on it, so they may not need a reload and can be run in parallel.
+     * Performance: Set to false to mark that the result is not used by following `load(...)` statements. I.e used only for rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
+     * Therefore, the following `load(...)` statements may not need a reload and can be run in parallel.
      * <p>
-     *     Default: false
+     *     Default: true
      *  </p>
      */
-    usedInRenderOnly?: boolean
+    critical?: boolean
 
     // Seems not possible because loaderFn is mostly an anonymous function and cannot be re-identified
     // /**
@@ -240,7 +240,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
     try {
         let result = inner();
-        if(options.usedInRenderOnly !== true) {
+        if(options.critical !== false) {
             renderRun.recordedReads.push(new RecordedValueRead(result)); // Add as dependency for the next loads
         }
         return watched(result);
