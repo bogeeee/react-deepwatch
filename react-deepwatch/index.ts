@@ -73,6 +73,7 @@ class RenderRun {
      * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
      */
     somePending?: Promise<unknown>;
+    somePendingAreCritical = false;
 
     cleanedUp = false;
 
@@ -202,8 +203,8 @@ type LoadOptions<T> = {
     placeHolder?: T
 
     /**
-     * Performance: Set to false to mark that the result is not used by following `load(...)` statements. I.e used only for rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
-     * Therefore, the following `load(...)` statements may not need a reload and can be run in parallel.
+     * Performance: Set to false, to mark following `load(...)` statements do not depend on the result. I.e when used only for immediate rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
+     * Therefore, the following `load(...)` statements may not need a reload and can run in parallel.
      * <p>
      *     Default: true
      *  </p>
@@ -279,6 +280,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             }
             if (lastLoadCall.result.state === "pending") {
                 renderRun.somePending = lastLoadCall.result.promise;
+                renderRun.somePendingAreCritical ||= (options.critical !== false);
                 if (hasPlaceHolder) { // Placeholder specified ?
                     return {result: options.placeHolder};
                 }
@@ -308,16 +310,17 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
 
             return canReuse.result as T; // return proxy'ed result from last call:
         }
-        else if(renderRun.somePending) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
-            // don't make a new call
-            if(hasPlaceHolder) {
-                return options.placeHolder!;
-            }
-            else {
-                throw renderRun.somePending;
-            }
-        }
         else { // cannot use last result ?
+            if(renderRun.somePending && renderRun.somePendingAreCritical) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
+                // don't make a new call
+                if(hasPlaceHolder) {
+                    return options.placeHolder!;
+                }
+                else {
+                    throw renderRun.somePending;
+                }
+            }
+
             // *** make a loadCall / exec loaderFn ***:
 
             let loadCall = new RecordedLoadCall();
@@ -337,6 +340,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             renderRun.persistent.loadCalls[renderRun.loadCallIndex] = loadCall; // add / replace
 
             renderRun.somePending = resultPromise;
+            renderRun.somePendingAreCritical ||= (options.critical !== false);
 
             if (hasPlaceHolder) { // Placeholder specified ?
                 loadCall.result.promise.then((result) => {
