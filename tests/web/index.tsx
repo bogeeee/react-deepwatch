@@ -139,6 +139,26 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 });
 
 
+let innerSuspense_inner_fetchCounter = 0;
+const InnerSuspense_Inner = WatchedComponent( (props: {model: {counter: number}}) => {
+    return <div>Result of InnerSuspense_Inner fetch: {load(delayed(() => `counter: ${props.model.counter}, fetched ${++innerSuspense_inner_fetchCounter} times`, 1000), {})}</div>
+});
+
+let innerSuspense_fetchCounter = 0;
+const InnerSuspense = WatchedComponent(props => {
+    const state = useWatchedState({counter:0});
+    return <div>
+        <h3>InnserSuspense</h3>
+        Result of fetch: {load(delayed(() => `counter: ${state.counter}, fetched ${++innerSuspense_fetchCounter} times`, 1000), {})}<br/>
+        <Suspense fallback="inner suspense: loading...">
+
+            <InnerSuspense_Inner model={state}/>
+        </Suspense>
+        <br/>
+        <button onClick={() => state.counter++}>Increase counter</button>
+    </div>
+});
+
 let ShouldReLoadIfPropsPropertyChanges_fetchCounter = 0;
 const ShouldReLoadIfPropsPropertyChanges_Child = WatchedComponent((props: {myProp:number, myProp2: number}) => {
     return <div>
@@ -172,6 +192,10 @@ function App(props) {
             <hr/>
             <Suspense fallback={<div>Loading</div>}>
                 <MultipleLoadsInALoop/>
+            </Suspense>
+            <hr/>
+            <Suspense fallback="Outer suspense: loading...">
+                <InnerSuspense/>
             </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>
