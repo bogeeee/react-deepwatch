@@ -202,12 +202,12 @@ function useLoad<T>(loader: () => Promise<T>): T {
 
 type LoadOptions<T> = {
     /**
-     * If you specify a placeholder, the component can be immediately rendered during loading.
+     * If you specify a fallback, the component can be immediately rendered during loading.
      * <p>
-     * undefined = undefined as placeholder.
+     * undefined = undefined as fallback.
      * </p>
      */
-    placeHolder?: T
+    fallback?: T
 
     /**
      * Performance: Set to false, to mark following `load(...)` statements do not depend on the result. I.e when used only for immediate rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
@@ -242,7 +242,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
-    const hasPlaceHolder = options.hasOwnProperty("placeHolder");
+    const hasFallback = options.hasOwnProperty("fallback");
     const renderRun = currentRenderRun;
     const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
 
@@ -288,8 +288,8 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             if (lastLoadCall.result.state === "pending") {
                 renderRun.somePending = lastLoadCall.result.promise;
                 renderRun.somePendingAreCritical ||= (options.critical !== false);
-                if (hasPlaceHolder) { // Placeholder specified ?
-                    return {result: options.placeHolder};
+                if (hasFallback) { // Fallback specified ?
+                    return {result: options.fallback};
                 }
                 throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
             } else if (lastLoadCall.result.state === "rejected") {
@@ -320,8 +320,8 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         else { // cannot use last result ?
             if(renderRun.somePending && renderRun.somePendingAreCritical) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
                 // don't make a new call
-                if(hasPlaceHolder) {
-                    return options.placeHolder!;
+                if(hasFallback) {
+                    return options.fallback!;
                 }
                 else {
                     throw renderRun.somePending;
@@ -349,16 +349,16 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
             renderRun.somePending = resultPromise;
             renderRun.somePendingAreCritical ||= (options.critical !== false);
 
-            if (hasPlaceHolder) { // Placeholder specified ?
+            if (hasFallback) { // Fallback specified ?
                 loadCall.result.promise.then((result) => {
-                    if(result === null || (!(typeof result === "object")) && result === options.placeHolder) { // Result is primitive and same as placeholder ?
-                        // Do nothing because the placeholder is already displayed
+                    if(result === null || (!(typeof result === "object")) && result === options.fallback) { // Result is primitive and same as fallback ?
+                        // Do nothing because the fallback is already displayed
                     }
                     else {
                         renderRun.persistent.handleLoadingFinished();
                     }
                 })
-                return options.placeHolder!;
+                return options.fallback!;
             }
 
             throw resultPromise; // Throwing a promise will put the react component into suspense state

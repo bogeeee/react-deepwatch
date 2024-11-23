@@ -94,8 +94,8 @@ const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
         <div>counter1: {state.counter1}</div>
         {/* Dont display counter2: we don't want to trigger refreshes on changes this way but want to see, if changes cause re executing the loader */}
 
-        <div>Retrieve counter1 dependant: {load( delayed( () => { return `counter: ${state.counter1}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter} times - should increase on button 1 only`},state.withDelay?1000:0), {placeHolder: "Loading"})}</div>
-        <div>Retrieve counter2 dependant: {load( delayed( () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`}, state.withDelay?500:0), {placeHolder: "Loading2"})}</div>
+        <div>Retrieve counter1 dependant: {load( delayed( () => { return `counter: ${state.counter1}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter} times - should increase on button 1 only`},state.withDelay?1000:0), {fallback: "Loading"})}</div>
+        <div>Retrieve counter2 dependant: {load( delayed( () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`}, state.withDelay?500:0), {fallback: "Loading2"})}</div>
 
         <button onClick={ () => state.counter1++} >1: Increase counter1</button><br/>
         <button onClick={ () => state.counter2++} >2: Increase counter2</button><br/>
@@ -108,7 +108,7 @@ const itemsFetchCounter: Record<string, number> = {};
 const itemsFetchCounter_incr = (name: string) => itemsFetchCounter[name] = (itemsFetchCounter[name] || 0)+1;
 const MultipleLoadsInALoop = WatchedComponent((props) => {
     const state = useWatchedState({
-        withPlaceholders: false,
+        withFallbacks: false,
         critical: true,
         globalCounter:0,
         items: [{name: "item1", counter:0},{name: "item2", counter:0},{name: "item3", counter:0},{name: "item4", counter:0}]
@@ -124,13 +124,13 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
                 delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`, 500),
-            state.withPlaceholders?{placeHolder: "placeholder", critical: state.critical}:{}
+            state.withFallbacks?{fallback: "fallback", critical: state.critical}:{}
         )}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button>
         </div>)}
 
-        <input type="checkbox" checked={state.withPlaceholders} onChange={(event) => {
-            state.withPlaceholders = event.target.checked}} />withPlaceholders
+        <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
+            state.withFallbacks = event.target.checked}} />withFallbacks
         <input type="checkbox" checked={state.critical} onChange={(event) => {
             state.critical = event.target.checked}} />critical
 

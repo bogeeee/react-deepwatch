@@ -60,7 +60,7 @@ To show a 🌀loading spinner / placeholder during load, either (from broad to f
 ### Performance optimization for load(...)
 To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
-- See the `LoadOptions#placeholder` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
+- See the `LoadOptions#fallback` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
 
 ### Caveats
 - The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponent#fallback`.
