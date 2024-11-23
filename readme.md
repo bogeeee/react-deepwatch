@@ -52,7 +52,7 @@ The returned Promise will be await'ed and the component will be put into [suspen
 _👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎_
 
 ### Show a 🌀loading spinner
-To show a 🌀loading spinner / placeholder during load, either...
+To show a 🌀loading spinner / placeholder during load, either (from broad to fine)...
  - wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense). It can be wrapped at any parent level😎.
  - or specify a `fallback` value in `WatchedComponentOptions`, which is similar to the above. 
  - or specify a `fallback` value via `load(..., {fallback:"🌀"})`, which is then used as a result for that **specific** statement (not the entire component).
