@@ -1,6 +1,6 @@
 import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
-import {useState} from "react";
+import {useLayoutEffect, useState, createElement, Fragment} from "react";
 import {ProxiedGraph} from "./proxiedGraph";
 
 let watchedGraph: WatchedGraph | undefined
@@ -39,7 +39,8 @@ class WatchedComponentPersistent {
      * Promise, when something is loading and component is in suspense
      * Error when errored
      */
-    state!: RenderRun | Promise<unknown> | Error
+    state!: RenderRun | Promise<unknown> | Error;
+    hadASuccessfullMount = false;
 
     handleLoadingFinished() {
         if(this.state instanceof RenderRun) {
@@ -103,6 +104,9 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
         persistent.doReRender = () => setRenderCounter(renderCounter+1);
+        useLayoutEffect(() => {
+            persistent.hadASuccessfullMount = true;
+        });
 
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
@@ -131,11 +135,14 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
             catch (e) {
                 renderRun.cleanUp();
-                if(e instanceof Promise) { // TODO: better check / better signal
+                if(e instanceof Promise) {
                     persistent.state = e;
                     // Quick and dirty handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
                     e.then(result => {persistent.handleLoadingFinished()})
-                    return "...loading..."; // TODO: return loader
+                    if(!persistent.hadASuccessfullMount) {
+                        return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
+                    }
+                    throw e;
                 }
                 else {
                     throw e;
@@ -235,7 +242,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
-    const hasPlaceHolder = options.hasOwnProperty("placeHolder"); // TODO: check for inherited property as well
+    const hasPlaceHolder = options.hasOwnProperty("placeHolder");
     const renderRun = currentRenderRun;
     const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
 

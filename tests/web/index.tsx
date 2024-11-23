@@ -170,7 +170,9 @@ function App(props) {
             <hr/>
             <ShouldReLoadIfStateChanges/>
             <hr/>
-            <MultipleLoadsInALoop/>
+            <Suspense fallback={<div>Loading</div>}>
+                <MultipleLoadsInALoop/>
+            </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>
         </Suspense>
