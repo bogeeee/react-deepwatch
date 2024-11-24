@@ -1,6 +1,6 @@
 import React, {useState, Suspense} from "react";
 import {createRoot} from "react-dom/client";
-import {WatchedComponent, useWatchedState, load} from "react-deepwatch/develop";
+import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 
 
@@ -159,6 +159,42 @@ const InnerSuspense = WatchedComponent(props => {
     </div>
 });
 
+const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(props => {
+    const model = props.model;
+    return <div>
+        {!model.canceled?
+            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
+            <div>Canceled</div>}
+    </div>
+})
+
+const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback = new WatchedComponent(props => {
+    const model = props.model;
+    return <div>
+        {!model.canceled?
+            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
+            <div>Canceled</div>}
+    </div>
+}, {fallback: <div>Loading with WatchedComponentOptions#fallback...</div>})
+
+const ShouldReactToOtherPropChangesWhileLoading = new WatchedComponent(props => {
+    const state = useWatchedState({counter:0, withFallbacks: false, canceled: false});
+
+    return <div>
+        <h3>ShouldReactToOtherPropChangesWhileLoading</h3>
+        <Suspense fallback={<div>Loading...</div>}>
+            <ShouldReactToOtherPropChangesWhileLoading_Inner model={state} />
+        </Suspense>
+        <ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback model={state}/>
+        <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
+            state.withFallbacks = event.target.checked}} />withFallback<br/>
+        <button onClick={() => state.counter++}>Increase counter</button>&#160;
+        <input type="checkbox" checked={state.canceled} onChange={(event) => {
+        state.canceled = event.target.checked}} />Canceled <i>Should interrupt the loading **immediately**</i>
+    </div>
+})
+
+
 let ShouldReLoadIfPropsPropertyChanges_fetchCounter = 0;
 const ShouldReLoadIfPropsPropertyChanges_Child = WatchedComponent((props: {myProp:number, myProp2: number}) => {
     return <div>
@@ -196,6 +232,10 @@ function App(props) {
             <hr/>
             <Suspense fallback="Outer suspense: loading...">
                 <InnerSuspense/>
+            </Suspense>
+            <hr/>
+            <Suspense fallback="Outer suspense: loading...">
+                <ShouldReactToOtherPropChangesWhileLoading/>
             </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>

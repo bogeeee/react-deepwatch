@@ -8,6 +8,11 @@ export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: R
 let watchedGraph: WatchedGraph | undefined
 
 type WatchedComponentOptions = {
+    /**
+     * A fallback react tree to show when some `load(...)` statement in <strong>this</strong> component is loading.
+     * Use this if you have issues with screen flickering with <code><Suspense></code>.
+     */
+    fallback?: ReactNode,
 
     /**
      * Everything that's **taken** from props, {@link useWatchedState} or {@link watched} will be returned, wrapped in a proxy that watches for modifications.
@@ -17,7 +22,7 @@ type WatchedComponentOptions = {
      *
      * <p>Default: true</p>
      */
-    watchExternalModifications: boolean
+    watchExternalModifications?: boolean
 }
 
 class RecordedLoadCall {
@@ -98,7 +103,7 @@ class RenderRun {
 }
 let currentRenderRun: RenderRun| undefined;
 
-export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any) {
+export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
     return (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
@@ -141,8 +146,13 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.then(result => {persistent.doReRender()})
+                        e.then(result => {persistent.doReRender()}) // TODO: also on error
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
+                    }
+
+                    if(options.fallback) {
+                        e.then(result => {persistent.doReRender()}) // TODO: also on error
+                        return options.fallback;
                     }
 
                     // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForPropertyChanges();
