@@ -1,6 +1,6 @@
 import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
-import {useLayoutEffect, useState, createElement, Fragment} from "react";
+import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect} from "react";
 import {ProxiedGraph} from "./proxiedGraph";
 
 let watchedGraph: WatchedGraph | undefined
@@ -41,18 +41,11 @@ class WatchedComponentPersistent {
      */
     state!: RenderRun | Promise<unknown> | Error;
     hadASuccessfullMount = false;
-
-    handleLoadingFinished() {
-        if(this.state instanceof RenderRun) {
-            this.state.cleanUp();
-            this.doReRender();
-        }
-        else {
-            this.doReRender();
-        }
-    }
 }
 
+/**
+ * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent
+ */
 class RenderRun {
 
     //watchedGraph= new WatchedGraph();
@@ -111,6 +104,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
         const renderRun = currentRenderRun = new RenderRun(persistent);
+        useEffect(() => () => renderRun.cleanUp()); // // Clean up when component is unmounted/before rerender
 
         try {
             const watchedProps = createProxyForProps(renderRun.watchedGraph, props);
@@ -137,9 +131,9 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 renderRun.cleanUp();
                 if(e instanceof Promise) {
                     persistent.state = e;
-                    // Quick and dirty handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                    e.then(result => {persistent.handleLoadingFinished()})
                     if(!persistent.hadASuccessfullMount) {
+                        // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
+                        e.then(result => {persistent.doReRender()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
                     }
                     throw e;
@@ -353,10 +347,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             if (hasFallback) { // Fallback specified ?
                 loadCall.result.promise.then((result) => {
                     if(result === null || (!(typeof result === "object")) && result === options.fallback) { // Result is primitive and same as fallback ?
-                        // Do nothing because the fallback is already displayed
+                        // No re-render needed because the fallback is already displayed
                     }
                     else {
-                        renderRun.persistent.handleLoadingFinished();
+                        renderRun.persistent.doReRender();
                     }
                 })
                 return options.fallback!;
