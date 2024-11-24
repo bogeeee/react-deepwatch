@@ -2,6 +2,7 @@ import React, {useState, Suspense} from "react";
 import {createRoot} from "react-dom/client";
 import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
+import {ErrorBoundary} from "react-error-boundary";
 
 
 function renderCounter(msg: string) {
@@ -16,16 +17,24 @@ function useUtil() {
     return {globalObj,  globalObjCtl: <div><button onClick={ () => globalObj.counter++} >globalObj: Increase counter</button></div>}
 }
 
-function delayed(fn: () => unknown, delay = 1000) {
+function delayed(fn: () => unknown, delay = 1000, returnError= false) {
     return async () => {
         const result = await fn();
         if(delay === 0) {
+            if(returnError) {
+                throw new Error("Intended error");
+            }
             return result;
         }
 
         return await new Promise((resolve, reject) => {
             setTimeout(() => {
-                resolve(result);
+                if(returnError) {
+                    reject(new Error("Intended error") )
+                }
+                else {
+                    resolve(result);
+                }
             }, delay);
         })
     }
@@ -163,7 +172,7 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(pro
     const model = props.model;
     return <div>
         {!model.canceled?
-            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
+            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
             <div>Canceled</div>}
     </div>
 })
@@ -172,25 +181,28 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback =
     const model = props.model;
     return <div>
         {!model.canceled?
-            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
+            <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
             <div>Canceled</div>}
     </div>
 }, {fallback: <div>Loading with WatchedComponentOptions#fallback...</div>})
 
 const ShouldReactToOtherPropChangesWhileLoading = new WatchedComponent(props => {
-    const state = useWatchedState({counter:0, withFallbacks: false, canceled: false});
+    const state = useWatchedState({counter:0, withFallbacks: false, canceled: false, shouldReturnAnError: false});
 
     return <div>
         <h3>ShouldReactToOtherPropChangesWhileLoading</h3>
+        <ExampleErrorBoundary>
         <Suspense fallback={<div>Loading...</div>}>
             <ShouldReactToOtherPropChangesWhileLoading_Inner model={state} />
         </Suspense>
         <ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback model={state}/>
+        </ExampleErrorBoundary>
         <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
             state.withFallbacks = event.target.checked}} />withFallback<br/>
         <button onClick={() => state.counter++}>Increase counter</button>&#160;
-        <input type="checkbox" checked={state.canceled} onChange={(event) => {
-        state.canceled = event.target.checked}} />Canceled <i>Should interrupt the loading **immediately**</i>
+        <input type="checkbox" checked={state.canceled} onChange={(event) => {state.canceled = event.target.checked}} />Canceled <i>Should interrupt the loading **immediately**</i>
+        <br/>
+        <input type="checkbox" checked={state.shouldReturnAnError} onChange={(event) => {state.shouldReturnAnError = event.target.checked}} />Return error <i>When unchecking, it should recover</i>
     </div>
 })
 
@@ -215,6 +227,17 @@ const ShouldReLoadIfPropsChange = WatchedComponent((props) => {
     </div>
 });
 
+const LoadErrorsImmediately = WatchedComponent(props => {
+    return load(async () => {throw new Error("This error should be displayed immediately")});
+
+});
+
+const ExampleErrorBoundary = (props) => {
+    return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>
+        {props.children}
+    </ErrorBoundary>
+}
+
 function App(props) {
     return <div>
         <Suspense fallback={<div>Loading</div>}>
@@ -234,8 +257,14 @@ function App(props) {
                 <InnerSuspense/>
             </Suspense>
             <hr/>
-            <Suspense fallback="Outer suspense: loading...">
-                <ShouldReactToOtherPropChangesWhileLoading/>
+                <Suspense fallback="Outer suspense: loading...">
+                    <ShouldReactToOtherPropChangesWhileLoading/>
+                </Suspense>
+            <hr/>
+            <Suspense fallback="loading...">
+                <ExampleErrorBoundary>
+                    <LoadErrorsImmediately/>
+                </ExampleErrorBoundary>
             </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>

@@ -44,9 +44,10 @@ class WatchedComponentPersistent {
     /**
      * RenderRun, when component is currently rendering or beeing displayed
      * Promise, when something is loading and component is in suspense
-     * Error when errored
+     * Error when error was thrown during last render
+     * unknown: Something else was thrown during last render
      */
-    state!: RenderRun | Promise<unknown> | Error;
+    state!: RenderRun | Promise<unknown> | Error | unknown;
     hadASuccessfullMount = false;
 }
 
@@ -146,12 +147,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.then(result => {persistent.doReRender()}) // TODO: also on error
+                        e.finally(result => {persistent.doReRender()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
                     }
 
                     if(options.fallback) {
-                        e.then(result => {persistent.doReRender()}) // TODO: also on error
+                        e.finally(result => {persistent.doReRender()})
                         return options.fallback;
                     }
 
@@ -306,7 +307,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                 }
                 throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
             } else if (lastLoadCall.result.state === "rejected") {
-                return false; // Try again
+                throw lastLoadCall.result.rejectReason;
             } else {
                 throw new Error("Invalid state of lastLoadCall.result.state")
             }
@@ -353,7 +354,6 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             })
             resultPromise.catch(reason => {
                 loadCall.result = {state: "rejected", rejectReason: reason}
-                // TODO: set component to error state
             })
             loadCall.result = {state: "pending", promise: resultPromise};
 
@@ -370,6 +370,9 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                     else {
                         renderRun.persistent.doReRender();
                     }
+                })
+                loadCall.result.promise.catch((error) => {
+                    renderRun.persistent.doReRender(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
                 })
                 return options.fallback!;
             }

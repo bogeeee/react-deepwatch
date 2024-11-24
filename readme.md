@@ -12,7 +12,7 @@
 
 # Install
 ````bash
-npm install --save react-deepwatch
+npm install --save react-deepwatch react-error-boundary
 ````
 
 # Usage
