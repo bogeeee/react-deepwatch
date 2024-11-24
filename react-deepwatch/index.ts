@@ -1,6 +1,7 @@
 import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect} from "react";
+import {useErrorBoundary} from "react-error-boundary";
 import {ProxiedGraph} from "./proxiedGraph";
 
 export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
@@ -41,6 +42,21 @@ class RecordedLoadCall {
 class WatchedComponentPersistent {
     loadCalls: RecordedLoadCall[] = [];
     doReRender!: () => void
+
+    /**
+     * See {@link https://github.com/bvaughn/react-error-boundary?tab=readme-ov-file#dismiss-the-nearest-error-boundary}
+     * From optional package.
+     */
+    dismissErrorBoundary?: () => void;
+
+    /**
+     * When a load finished or finished with error, so the component needs to be rerendered
+     */
+    handleLoadedValueChanged() {
+        this.dismissErrorBoundary?.();
+        this.doReRender();
+    }
+
     /**
      * RenderRun, when component is currently rendering or beeing displayed
      * Promise, when something is loading and component is in suspense
@@ -94,8 +110,8 @@ class RenderRun {
         if(this.cleanedUp) {
             throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
         }
+        this.persistent.dismissErrorBoundary?.();
         this.persistent.doReRender();
-        // TODO: tell the error wrapper to retry
     }
 
     constructor(persistent: WatchedComponentPersistent) {
@@ -112,6 +128,16 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         useEffect(() => {
             persistent.hadASuccessfullMount = true;
         });
+
+        // Register dismissErrorBoundary function:
+        if(typeof useErrorBoundary === "function") { // Optional package was loaded?
+            try {
+                persistent.dismissErrorBoundary = useErrorBoundary().resetBoundary;
+            }
+            catch (e) {
+                // Ignore the  new Error("ErrorBoundaryContext not found"), when not wrapped in error boundary
+            }
+        }
 
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
@@ -147,12 +173,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.finally(result => {persistent.doReRender()})
+                        e.finally(result => {persistent.handleLoadedValueChanged()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
                     }
 
                     if(options.fallback) {
-                        e.finally(result => {persistent.doReRender()})
+                        e.finally(result => {persistent.handleLoadedValueChanged()})
                         return options.fallback;
                     }
 
@@ -365,14 +391,14 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             if (hasFallback) { // Fallback specified ?
                 loadCall.result.promise.then((result) => {
                     if(result === null || (!(typeof result === "object")) && result === options.fallback) { // Result is primitive and same as fallback ?
-                        // No re-render needed because the fallback is already displayed
+                        // Loaded value did not change / No re-render needed because the fallback is already displayed
                     }
                     else {
-                        renderRun.persistent.doReRender();
+                        renderRun.persistent.handleLoadedValueChanged();
                     }
                 })
                 loadCall.result.promise.catch((error) => {
-                    renderRun.persistent.doReRender(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
+                    renderRun.persistent.handleLoadedValueChanged(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
                 })
                 return options.fallback!;
             }
