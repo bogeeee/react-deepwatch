@@ -43,6 +43,7 @@ export class RecordedPropertyRead extends RecordedRead{
         }
         else {
             this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
+            debug_numberOfPropertyChangeListeners++;
         }
     }
 
@@ -52,6 +53,7 @@ export class RecordedPropertyRead extends RecordedRead{
         }
         else {
             this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
+            debug_numberOfPropertyChangeListeners--;
         }
     }
 
@@ -171,3 +173,8 @@ class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         this.afterWriteOnPropertyListeners.get(key)?.forEach(l => l(newValue));
     }
 }
+
+/**
+ * Only counts on vs off calls for a quick alignment check
+ */
+export let debug_numberOfPropertyChangeListeners = 0;

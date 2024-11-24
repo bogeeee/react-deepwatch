@@ -204,3 +204,7 @@ function App(props) {
 }
 
 createRoot(document.getElementById("root")).render(<App/>);
+
+setInterval(() => {
+    console.log("Number of change listeners: ", debug_numberOfPropertyChangeListeners)
+}, 500)

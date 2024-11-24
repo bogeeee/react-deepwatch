@@ -3,6 +3,8 @@ import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect} from "react";
 import {ProxiedGraph} from "./proxiedGraph";
 
+export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
+
 let watchedGraph: WatchedGraph | undefined
 
 type WatchedComponentOptions = {
