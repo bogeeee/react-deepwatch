@@ -97,7 +97,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
         persistent.doReRender = () => setRenderCounter(renderCounter+1);
-        useLayoutEffect(() => {
+        useEffect(() => {
             persistent.hadASuccessfullMount = true;
         });
 
