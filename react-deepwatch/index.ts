@@ -73,9 +73,13 @@ class RenderRun {
 
     cleanedUp = false;
 
-    cleanUpPropChangeListenerFns: (()=>void)[] = [];
+    startPropChangeListeningFns: (()=>void)[] = [];
+    startListeningForPropertyChanges() {
+        this.startPropChangeListeningFns.forEach(c => c()); // Clean the listeners
+    }
 
-    cleanUpPropertyChangeListeners() {
+    cleanUpPropChangeListenerFns: (()=>void)[] = [];
+    stopListeningForPropertyChanges() {
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
         this.cleanedUp = true;
     }
@@ -84,8 +88,8 @@ class RenderRun {
         if(this.cleanedUp) {
             throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
         }
-        this.cleanUpPropertyChangeListeners();
         this.persistent.doReRender();
+        // TODO: tell the error wrapper to retry
     }
 
     constructor(persistent: WatchedComponentPersistent) {
@@ -106,7 +110,10 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
         const renderRun = currentRenderRun = new RenderRun(persistent);
-        useEffect(() => () => renderRun.cleanUpPropertyChangeListeners()); // // Clean up when component is unmounted/before rerender
+        useEffect(() => {
+            renderRun.startListeningForPropertyChanges();
+            return () => renderRun.stopListeningForPropertyChanges();
+        });
 
         try {
             const watchedProps = createProxyForProps(renderRun.watchedGraph, props);
@@ -120,8 +127,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     }
                     renderRun.handleWatchedPropertyChange();
                 }
-                read.onChange(changeListener);
-                renderRun.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+                renderRun.startPropChangeListeningFns .push(() => read.onChange (changeListener));
+                renderRun.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
                 renderRun.recordedReads.push(read);
             };
             renderRun.watchedGraph.onAfterRead(readListener)
@@ -130,7 +137,6 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 return componentFn(watchedProps); // Run the user's component function
             }
             catch (e) {
-                renderRun.cleanUpPropertyChangeListeners();
                 if(e instanceof Promise) {
                     persistent.state = e;
                     if(!persistent.hadASuccessfullMount) {
@@ -138,11 +144,9 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                         e.then(result => {persistent.doReRender()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
                     }
-                    throw e;
                 }
-                else {
-                    throw e;
-                }
+
+                throw e;
             }
             finally {
                 renderRun.watchedGraph.offAfterRead(readListener);
@@ -308,8 +312,8 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                     }
                     renderRun.handleWatchedPropertyChange();
                 }
-                read.onChange(changeListener);
-                renderRun.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
+                renderRun.startPropChangeListeningFns .push(() => read.onChange (changeListener));
+                renderRun.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
             })
 
             return canReuse.result; // return proxy'ed result from last call:
