@@ -200,14 +200,14 @@ function useLoad<T>(loader: () => Promise<T>): T {
     return undefined as T;
 }
 
-type LoadOptions<T> = {
+type LoadOptions = {
     /**
      * If you specify a fallback, the component can be immediately rendered during loading.
      * <p>
      * undefined = undefined as fallback.
      * </p>
      */
-    fallback?: T
+    fallback?: unknown
 
     /**
      * Performance: Set to false, to mark following `load(...)` statements do not depend on the result. I.e when used only for immediate rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
@@ -232,8 +232,9 @@ type LoadOptions<T> = {
      */
     poll?: number
 }
-
-export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}): T {
+export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<LoadOptions, "fallback">): T
+export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
+export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}): any {
     // Wording:
     // - "previous" means: load(...) statements more upwards in the user's code
     // - "last" means: this load call but from a past render run.
@@ -315,7 +316,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
                 renderRun.cleanUpFns.push(() => read.offChange(changeListener)); // Cleanup on re-render
             })
 
-            return canReuse.result as T; // return proxy'ed result from last call:
+            return canReuse.result; // return proxy'ed result from last call:
         }
         else { // cannot use last result ?
             if(renderRun.somePending && renderRun.somePendingAreCritical) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
@@ -365,7 +366,7 @@ export function load<T>(loaderFn: () => Promise<T>, options: LoadOptions<T> = {}
         }
     }
 
-    function watched(value: T) { return (value !== null && typeof value === "object")?renderRun.watchedGraph.getProxyFor(value):value }
+    function watched(value: unknown) { return (value !== null && typeof value === "object")?renderRun.watchedGraph.getProxyFor(value):value }
 }
 
 /**
