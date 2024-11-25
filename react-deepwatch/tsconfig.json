@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     /* Visit https://aka.ms/tsconfig to read more about this file */
+    "composite": true,
     "declaration": true,
     "target": "ES2017",
     "module": "CommonJS",

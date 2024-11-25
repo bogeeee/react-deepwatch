@@ -1,0 +1,7 @@
+{
+  "name": "react-deepwatch-development",
+  "version": "1.0.0",
+  "dependencies": {
+  },
+  "workspaces": ["react-deepwatch", "tests/web"]
+}
