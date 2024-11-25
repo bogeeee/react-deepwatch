@@ -4,7 +4,7 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "dev": "vite"
+    "dev": "vite --force"
   },
   "dependencies": {
     "@types/react": "^18.3.11",
