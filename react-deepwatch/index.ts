@@ -1,7 +1,7 @@
 import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
-import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect} from "react";
-import {useErrorBoundary} from "react-error-boundary";
+import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext} from "react";
+import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {ProxiedGraph} from "./proxiedGraph";
 
 export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
@@ -131,11 +131,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
         // Register dismissErrorBoundary function:
         if(typeof useErrorBoundary === "function") { // Optional package was loaded?
-            try {
+            if(useContext(ErrorBoundaryContext)) { // Inside an error boundary?
                 persistent.dismissErrorBoundary = useErrorBoundary().resetBoundary;
-            }
-            catch (e) {
-                // Ignore the  new Error("ErrorBoundaryContext not found"), when not wrapped in error boundary
             }
         }
 
