@@ -41,13 +41,21 @@ class RecordedLoadCall {
  */
 class WatchedComponentPersistent {
     loadCalls: RecordedLoadCall[] = [];
-    doReRender!: () => void
+    _doReRender!: () => void
 
     /**
      * See {@link https://github.com/bvaughn/react-error-boundary?tab=readme-ov-file#dismiss-the-nearest-error-boundary}
      * From optional package.
      */
     dismissErrorBoundary?: () => void;
+
+    doReRender() {
+        // Call listeners:
+        this.onBeforeReRenderListeners.forEach(fn => fn());
+        this.onBeforeReRenderListeners = [];
+
+        this._doReRender()
+    }
 
     /**
      * When a load finished or finished with error, so the component needs to be rerendered
@@ -65,10 +73,13 @@ class WatchedComponentPersistent {
      */
     state!: RenderRun | Promise<unknown> | Error | unknown;
     hadASuccessfullMount = false;
+
+    onBeforeReRenderListeners: (()=>void)[] = [];
 }
 
 /**
- * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent
+ * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent.
+ * - References to this can still exist when WatchedComponentPersistent is in a resumeable error state (is this a good idea? )
  */
 class RenderRun {
 
@@ -106,6 +117,17 @@ class RenderRun {
         this.cleanedUp = true;
     }
 
+    onUnmount() {
+        if(this.persistent.state instanceof Error && this.persistent.dismissErrorBoundary !== undefined) { // Error is displayed ?
+            // Still listen for property changes to be able to recover from errors
+
+            this.persistent.onBeforeReRenderListeners.push(() => {this.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
+        }
+        else {
+            this.stopListeningForPropertyChanges();
+        }
+    }
+
     handleWatchedPropertyChange() {
         if(this.cleanedUp) {
             throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
@@ -124,7 +146,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
     return (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
-        persistent.doReRender = () => setRenderCounter(renderCounter+1);
+        persistent._doReRender = () => setRenderCounter(renderCounter+1);
         useEffect(() => {
             persistent.hadASuccessfullMount = true;
         });
@@ -141,7 +163,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const renderRun = currentRenderRun = new RenderRun(persistent);
         useEffect(() => {
             renderRun.startListeningForPropertyChanges();
-            return () => renderRun.stopListeningForPropertyChanges();
+            return () => renderRun.onUnmount();
         });
 
         try {
