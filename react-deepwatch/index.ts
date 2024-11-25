@@ -67,6 +67,7 @@ class WatchedComponentPersistent {
 
     /**
      * RenderRun, when component is currently rendering or beeing displayed
+     * undefined, when component was unmounted (and nothing was thrown / not loading)
      * Promise, when something is loading and component is in suspense
      * Error when error was thrown during last render
      * unknown: Something else was thrown during last render
@@ -126,6 +127,10 @@ class RenderRun {
         else {
             this.stopListeningForPropertyChanges();
         }
+
+        if(this.persistent.state === this) {
+            this.persistent.state = undefined;
+        }
     }
 
     handleWatchedPropertyChange() {
@@ -138,6 +143,7 @@ class RenderRun {
 
     constructor(persistent: WatchedComponentPersistent) {
         this.persistent = persistent
+        persistent.state = this;
     }
 }
 let currentRenderRun: RenderRun| undefined;
