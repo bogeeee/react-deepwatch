@@ -173,12 +173,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.finally(result => {persistent.handleLoadedValueChanged()})
+                        e.finally(() => {persistent.handleLoadedValueChanged()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) an render again.
                     }
 
                     if(options.fallback) {
-                        e.finally(result => {persistent.handleLoadedValueChanged()})
+                        e.finally(() => {persistent.handleLoadedValueChanged()})
                         return options.fallback;
                     }
 
