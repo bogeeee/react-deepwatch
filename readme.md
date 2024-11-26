@@ -56,6 +56,10 @@ To show a 🌀loading spinner / placeholder during load, either...
  - wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense). It can be wrapped at any parent level😎.
  - or specify a `fallback` value via `load(..., {fallback:"🌀"})`, which is then used as a result for that **specific** statement (not the entire component).
 
+### Handle errors
+As with the above, you can **wrap your component in a** [`<ErrorBoundary fallback={<div>Something went wrong</div>}>...<MyComponent/>...</ErrorBoundary>`](https://github.com/bvaughn/react-error-boundary) from the [react-error-boundary](https://github.com/bvaughn/react-error-boundary) package, to handle load errors. It can be wrapped at any parent level😎.  
+It tries to recover from errors and re- runs the `loaderFn`, whenever a dependency changes. Note that recovering works only with the mentioned [react-error-boundary 4.x](https://github.com/bvaughn/react-error-boundary) and not with 3rd party error-boundary libraries.
+
 ### Performance optimization for load(...)
 To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
@@ -63,7 +67,7 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 
 ### Caveats
 - The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponent#fallback`.
-- `<Suspense>` inside your component function does not handle suspenses of loads in that same function. _Means: You must place it outside to handle them._
+- `<Suspense>` and `<ErrorBoundary>` inside your component function do not handle/catch loads in that **same** function. _Means: You must place them outside to handle/catch them._
 - When **try/catch' ing around `load(...)`** statements, you must check, if caught is `instanceof Promise` and re-throw it then. _Because this is the way for `load` to signal, that things are loading._
 - SSR is not supported.
 - [startTransition](https://react.dev/reference/react/startTransition) is not supported (has no effect).
@@ -73,4 +77,4 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 
 #Further notes
 ### useWatched
-You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props and state into your component function._
+You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props into your component function._
