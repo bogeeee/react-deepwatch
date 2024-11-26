@@ -130,13 +130,28 @@ class RenderRun {
     }
 
     onUnmount() {
+        const cleanUp = () => {
+            if(this.persistent.passiveRenderRequested !== undefined) { // Passive render requested ?
+                // Don't clean them up yet
+            }
+            else {
+                // Stop listening, for this or the passive render:
+                if(this.passiveRenderFor !== undefined) {
+                    this.passiveRenderFor.stopListeningForPropertyChanges();
+                }
+                else {
+                    this.stopListeningForPropertyChanges();
+                }
+            }
+        }
+
         if(this.persistent.state instanceof Error && this.persistent.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
 
-            this.persistent.onBeforeReRenderListeners.push(() => {this.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
+            this.persistent.onBeforeReRenderListeners.push(cleanUp); //Instead clean up listeners on next render
         }
         else {
-            this.stopListeningForPropertyChanges();
+            cleanUp();
         }
 
         if(this.persistent.state === this) {
@@ -212,6 +227,10 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 return componentFn(watchedProps); // Run the user's component function
             }
             catch (e) {
+                if(persistent.passiveRenderRequested !== undefined) {
+                    return createElement(Fragment, null); // Don't go to suspense **now**. The passive render might have a different outcome. (rerender will be done, see "finally")
+                }
+
                 persistent.state = e;
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
@@ -227,11 +246,6 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
                     // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForPropertyChanges();
                 }
-
-                if(persistent.passiveRenderRequested !== undefined) {
-                    return createElement(Fragment, null); // Don't go to suspense **now**. The passive render might have a different outcome. (rerender will be done, see "finally")
-                }
-
                 throw e;
             }
             finally {
@@ -246,8 +260,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             (renderRun.passiveRenderFor !== undefined && persistent.passiveRenderRequested !== undefined) && throwError("Illegal state");
 
             if(persistent.passiveRenderRequested !== undefined) {
-                setTimeout(() => { // TODO: remove settimeout
-                    persistent.doReRender(); // Hope it won't be faulty to request re-render through setState from the render code.
+                setTimeout(() => { // Must use setTimeout, cause we cannot re-render through setState from the render code.  // TODO: Fix race conditions with handleWatchedPropertyChange or handleLoadedValueChange and their rerender is now the passive one.
+                    persistent.doReRender();
                 })
             }
         }
@@ -349,7 +363,15 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 
             // Validity check:
             if(lastLoadCall === undefined) {
-                throw new Error("More load(...) statements in render run for status indication seen than last time. someLoading()'s result must not influence the structure/order of load(...) statements.");
+                //throw new Error("More load(...) statements in render run for status indication seen than last time. someLoading()'s result must not influence the structure/order of load(...) statements.");
+                // you can still get here when there was a some critical pending load before this, that had sliced off the rest. TODO: don't slice and just mark them as invalid
+
+                if(hasFallback) {
+                    return options.fallback;
+                }
+                else {
+                    throw new Error(`When using someLoading(), you must specify fallbacks for all your load statements:  load(..., {fallback: some-fallback-value})`);
+                }
             }
 
             //** return lastLoadCall.result:
@@ -360,6 +382,9 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                 throw lastLoadCall.result.rejectReason;
             }
             else if(lastLoadCall.result.state === "pending") {
+                if(hasFallback) {
+                    return options.fallback;
+                }
                 throw lastLoadCall.result.promise;
             }
             else {
@@ -490,7 +515,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 }
 
 /**
- *
+ * Note: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for someLoading() and load(...) statements are re-matched by their order.
  * @return A promise, when some load(...) statement from directly inside this watchedComponent function is currently loading. Undefined when nothing is loading.
  */
 export function someLoading(): Promise<unknown> | undefined {
