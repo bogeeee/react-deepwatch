@@ -50,10 +50,9 @@ class WatchedComponentPersistent {
     dismissErrorBoundary?: () => void;
 
     /**
-     * Set, when the next render should be a passive render / no load action should be done
+     * someLoading() or someError() was called
      */
-    passiveRenderForStateIndicator?: RenderRun
-
+    passiveRenderRequested?: RenderRun;
 
     doReRender() {
         // Call listeners:
@@ -112,9 +111,10 @@ class RenderRun {
     somePendingAreCritical = false;
 
     /**
-     * someLoading() or someError() was called
+     * Set, when the next render should be a passive render / no load action should be done
      */
-    passiveRenderForStateIndicatorRequested=false;
+    passiveRenderFor?: RenderRun
+
 
     cleanedUp = false;
 
@@ -178,7 +178,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         // Create RenderRun:
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
         const renderRun = currentRenderRun = new RenderRun(persistent);
-        const isPassiveRender = persistent.passiveRenderForStateIndicator !== undefined;
+        renderRun.passiveRenderFor = persistent.passiveRenderRequested;
+        persistent.passiveRenderRequested = undefined; // Reset request
 
         useEffect(() => {
             renderRun.startListeningForPropertyChanges();
@@ -191,7 +192,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
             // Install read listener:
             let readListener = (read: RecordedRead)  => {
-                if(!isPassiveRender) {
+                if(renderRun.passiveRenderFor === undefined) { // Active run ?
                     // Re-render on a change of the read value:
                     const changeListener = (newValue: unknown) => {
                         if (currentRenderRun) {
@@ -227,7 +228,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForPropertyChanges();
                 }
 
-                if(renderRun.passiveRenderForStateIndicatorRequested) {
+                if(persistent.passiveRenderRequested !== undefined) {
                     return createElement(Fragment, null); // Don't go to suspense **now**. The passive render might have a different outcome. (rerender will be done, see "finally")
                 }
 
@@ -242,18 +243,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             currentRenderRun = undefined;
 
             //Safety check:
-            (isPassiveRender && renderRun.passiveRenderForStateIndicatorRequested) && throwError("Illegal state");
+            (renderRun.passiveRenderFor !== undefined && persistent.passiveRenderRequested !== undefined) && throwError("Illegal state");
 
-            if(isPassiveRender) {
-                persistent.passiveRenderForStateIndicator = undefined; // Don't render passive again next time.
-            }
-            else {
-                if(renderRun.passiveRenderForStateIndicatorRequested) {
-                    persistent.passiveRenderForStateIndicator = renderRun; // Render passive next time
-                    setTimeout(() => {
-                        persistent.doReRender(); // Hope it won't be faulty to request re-render through setState from the render code.
-                    })
-                }
+            if(persistent.passiveRenderRequested !== undefined) {
+                setTimeout(() => { // TODO: remove settimeout
+                    persistent.doReRender(); // Hope it won't be faulty to request re-render through setState from the render code.
+                })
             }
         }
     }
@@ -349,7 +344,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
     let lastLoadCall = renderRun.loadCallIndex < renderRun.persistent.loadCalls.length?renderRun.persistent.loadCalls[renderRun.loadCallIndex]:undefined;
 
     try {
-        if(renderRun.persistent.passiveRenderForStateIndicator) { // Passive render ?
+        if(renderRun.passiveRenderFor !== undefined) { // Passive render ?
             // Don't look at recorded reads. Assume the order has not changed
 
             // Validity check:
@@ -502,10 +497,10 @@ export function someLoading(): Promise<unknown> | undefined {
     // Validity check:
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
-    if(currentRenderRun.persistent.passiveRenderForStateIndicator !== undefined) { // is passive render ?
-        return currentRenderRun.persistent.passiveRenderForStateIndicator.somePending;
+    if(currentRenderRun.passiveRenderFor !== undefined) { // is passive render ?
+        return currentRenderRun.passiveRenderFor.somePending;
     }
-    currentRenderRun.passiveRenderForStateIndicatorRequested = true; // Request passive render.
+    currentRenderRun.persistent.passiveRenderRequested = currentRenderRun; // Request passive render.
     return undefined;
 }
 
