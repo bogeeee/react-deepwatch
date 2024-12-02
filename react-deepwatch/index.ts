@@ -51,6 +51,8 @@ class WatchedComponentPersistent {
 
     _doReRender!: () => void
 
+    debug_tag?: string;
+
     doReRender() {
         // Call listeners:
         this.onBeforeReRenderListeners.forEach(fn => fn());
@@ -573,4 +575,8 @@ function createProxyForProps<P extends object>(graph: WatchedGraph, props: P): P
         })
     })
     return result as P;
+}
+
+export function debug_tagComponent(name: string) {
+    currentRenderRun!.frame.persistent.debug_tag = name;
 }

@@ -1,6 +1,6 @@
 import React, {useState, Suspense} from "react";
 import {createRoot} from "react-dom/client";
-import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, someLoading} from "react-deepwatch/develop";
+import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, someLoading} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
