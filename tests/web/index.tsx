@@ -233,8 +233,26 @@ const ShouldReLoadIfPropsChange = WatchedComponent((props) => {
     </div>
 });
 
+const CheckBox = WatchedComponent((props: {model: {value: boolean}}) => {
+    return <input type="checkbox" checked={props.model.value} onChange={(event) => {props.model.value = event.target.checked}} />
+});
+
+const LoadErrorsImmediately_inner = WatchedComponent((props: {model: {value: boolean}}) => {
+    debug_tagComponent("LoadErrorsImmediately_inner");
+    return load(async () => {
+        if(props.model.value) throw new Error("This error should be displayed immediately");
+        return "ok";
+    });
+
+});
+
 const LoadErrorsImmediately = WatchedComponent(props => {
-    return load(async () => {throw new Error("This error should be displayed immediately")});
+    const state = useWatchedState({value: true});
+
+    return <div>
+        <h3>LoadErrorsImmediately</h3>
+        <ExampleErrorBoundary><LoadErrorsImmediately_inner model={state}/></ExampleErrorBoundary>
+        <br/><CheckBox model={state} />Throw error <i>Unchecking should recover</i></div>
 
 });
 
