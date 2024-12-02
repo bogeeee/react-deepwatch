@@ -134,7 +134,8 @@ let currentRenderRun: RenderRun| undefined;
 
 /**
  *
- * Lifecycle: Render + optional passive render + timespan until unmounted or before the next render (=because something new happened).
+ * Lifecycle: Render + optional passive render + timespan until the next render (=because something new happened) or complete unmount.
+ * Note: In case of an error and wrapped in a recoverable <ErrorBoundary>, the may not even be a mount but this Frame still exist.
  *
  */
 class Frame {
@@ -259,6 +260,15 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     }
 
                     // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForPropertyChanges();
+                }
+                else { // Error?
+                    if(frame.dismissErrorBoundary !== undefined) { // inside  (recoverable) error boundary ?
+                        // The useEffects won't fire, so whe simulate the frame's effect lifecycle here:
+                        frame.startListeningForPropertyChanges();
+                        persistent.onBeforeReRenderListeners.push(() => {
+                            frame.cleanup()
+                        });
+                    }
                 }
                 throw e;
             }
