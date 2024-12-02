@@ -117,18 +117,16 @@ class RenderRun {
      * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
      */
     handleEffectCleanup() {
-        const inner = () => {
-            if (!this.passiveRenderRequested) {
-                this.frame.cleanup();
-            }
+        if (this.passiveRenderRequested) {
+            return; // clean up next time after passive render
         }
 
         if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onBeforeReRenderListeners.push(inner); //Instead clean up listeners on next render
+            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.cleanup()}); //Instead clean up listeners on next render
         }
         else {
-            inner();
+            this.frame.cleanup(); // Clean up now
         }
     }
 }
