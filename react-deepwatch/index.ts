@@ -60,9 +60,9 @@ class WatchedComponentPersistent {
     }
 
     /**
-     * When a load finished or finished with error, so the component needs to be rerendered
+     * When a load finished or finished with error, or when a watched value changed. So the component needs to be rerendered
      */
-    handleLoadedValueChanged() {
+    handleChangeEvent() {
         this.currentFrame.dismissErrorBoundary?.();
         this.doReRender();
     }
@@ -179,8 +179,7 @@ class Frame {
         if(this.cleanedUp) {
             throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
         }
-        this.dismissErrorBoundary?.();
-        this.persistent.doReRender();
+        this.persistent.handleChangeEvent();
     }
 }
 
@@ -250,12 +249,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.finally(() => {persistent.handleLoadedValueChanged()})
+                        e.finally(() => {persistent.handleChangeEvent()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) and render again.
                     }
 
                     if(options.fallback) {
-                        e.finally(() => {persistent.handleLoadedValueChanged()})
+                        e.finally(() => {persistent.handleChangeEvent()})
                         return options.fallback;
                     }
 
@@ -516,11 +515,11 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                         // Loaded value did not change / No re-render needed because the fallback is already displayed
                     }
                     else {
-                        persistent.handleLoadedValueChanged();
+                        persistent.handleChangeEvent();
                     }
                 })
                 loadCall.result.promise.catch((error) => {
-                    persistent.handleLoadedValueChanged(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
+                    persistent.handleChangeEvent(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
                 })
                 return options.fallback!;
             }
