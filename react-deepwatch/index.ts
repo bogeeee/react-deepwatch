@@ -547,6 +547,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 
 /**
  * Probe if a <code>load(...)</code> statement directly inside this watchedComponent is currently loading.
+ * Note: It's mostly needed to also specify a {@link LoadOptions#fallback} in the load statement's options to produce a valid render result while loading. Otherwise the whole component goes into suspense.
  * <p>
  * Caveat: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for isLoading() and the load(...) statements are re-matched by their order.
  * </p>

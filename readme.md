@@ -54,7 +54,8 @@ _👍 load(...) can be inside a conditional block or a loop. Then it has already
 ### Show a 🌀loading spinner
 To show a 🌀loading spinner / placeholder during load, either...
  - wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense). It can be wrapped at any parent level😎.
- - or specify a `fallback` value via `load(..., {fallback:"🌀"})`, which is then used as a result for that **specific** statement (not the entire component).
+ - or use `isLoading()` inside your component, to probe if any or a certain `load(...)`statement is loading. _Mind the caveat of not using it for a condition to cut off a load statement. See jsDoc._   
+ - and/or specify a `fallback` value via `load(..., {fallback:"🌀"})`.
 
 ### Handle errors
 As with the above, you can **wrap your component in a** [`<ErrorBoundary fallback={<div>Something went wrong</div>}>...<MyComponent/>...</ErrorBoundary>`](https://github.com/bvaughn/react-error-boundary) from the [react-error-boundary](https://github.com/bvaughn/react-error-boundary) package, to handle load errors. It can be wrapped at any parent level😎.  
