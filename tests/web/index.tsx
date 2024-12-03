@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, someLoading} from "react-deepwatch/develop";
+import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -138,27 +138,27 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 
     const globalCounter = state.globalCounter;
 
-    if(state.withIsLoadingIndicator && someLoading()) {
+    if(state.withIsLoadingIndicator && isLoading()) {
         //return "🌀 "
     }
 
     return <div>
         <h3>MultipleLoadsInALoop</h3>
         {renderCounter("expected to increase reasonably" )}
-        {(state.withIsLoadingIndicator && someLoading())?"🌀 ":null}
+        {(state.withIsLoadingIndicator && isLoading())?"🌀 ":null}
         {state.items.map(item => <div key={item.name}>
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
                 delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`, 500),
-            state.withFallbacks?{fallback: "fallback", critical: state.critical}:{}
+            {name: item.name,...(state.withFallbacks?{fallback: "fallback", critical: state.critical}:{})}
         )}
-            &#160;<button onClick={ () => item.counter++} >Increase items's counter</button>
+            &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
         </div>)}
 
         <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
             state.withFallbacks = event.target.checked}} />withFallbacks
         <input type="checkbox" checked={state.withIsLoadingIndicator} onChange={(event) => {
-            state.withIsLoadingIndicator = event.target.checked}} />with someLoading() indicator
+            state.withIsLoadingIndicator = event.target.checked}} />with isLoading() indicator
         <input type="checkbox" checked={state.critical} onChange={(event) => {
             state.critical = event.target.checked}} />critical
 

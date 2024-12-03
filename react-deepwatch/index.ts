@@ -34,6 +34,7 @@ class RecordedLoadCall {
     recordedReadsInsideLoaderFn!: RecordedRead[];
 
     result!: PromiseState<unknown>;
+    name?: string;
 }
 
 /**
@@ -84,7 +85,7 @@ class RenderRun {
     isPassive=false;
 
     /**
-     * Set when someLoading or someError is called.
+     * Set when isLoading or someError is called.
      * Note: Looks to be redundant to WatchedComponentPersistent#nextRenderIsPassive on the first view, but it's safer to set this here and keep the other one very short-lived, because who knows what concurrent re-renders will fire when and are then run falsely passive.
      */
     passiveRenderRequested=false;
@@ -183,7 +184,7 @@ class Frame {
         this.persistent.handleChangeEvent();
     }
 
-    watchPropertyChange(read: Read) {
+    watchPropertyChange(read: RecordedRead) {
         // Re-render on a change of the read value:
         const changeListener = (newValue: unknown) => {
             if (currentRenderRun) {
@@ -369,6 +370,11 @@ type LoadOptions = {
      * Poll after this amount of milliseconds
      */
     poll?: number
+
+    /**
+     * {@link isLoading} Can filter for only the load(...) statements with this given name.
+     */
+    name?: string
 }
 export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<LoadOptions, "fallback">): T
 export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
@@ -394,14 +400,14 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 
             // Validity check:
             if(lastLoadCall === undefined) {
-                //throw new Error("More load(...) statements in render run for status indication seen than last time. someLoading()'s result must not influence the structure/order of load(...) statements.");
+                //throw new Error("More load(...) statements in render run for status indication seen than last time. isLoading()'s result must not influence the structure/order of load(...) statements.");
                 // you can still get here when there was a some critical pending load before this, that had sliced off the rest. TODO: don't slice and just mark them as invalid
 
                 if(hasFallback) {
                     return options.fallback;
                 }
                 else {
-                    throw new Error(`When using someLoading(), you must specify fallbacks for all your load statements:  load(..., {fallback: some-fallback-value})`);
+                    throw new Error(`When using isLoading(), you must specify fallbacks for all your load statements:  load(..., {fallback: some-fallback-value})`);
                 }
             }
 
@@ -499,6 +505,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             // *** make a loadCall / exec loaderFn ***:
 
             let loadCall = new RecordedLoadCall();
+            loadCall.name = options.name;
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
@@ -539,28 +546,24 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 }
 
 /**
- * Note: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for someLoading() and load(...) statements are re-matched by their order.
- * @return true, when some load(...) statement from directly inside this watchedComponent function is currently loading.
+ * Probe if a <code>load(...)</code> statement directly inside this watchedComponent is currently loading.
+ * <p>
+ * Caveat: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for isLoading() and the load(...) statements are re-matched by their order.
+ * </p>
+ * @param nameFilter When set, consider only those with the given {@link LoadOptions#name}. I.e. <code>load(..., {name: "myDropdownListEntries"})</code>
+ *
  */
-export function someLoading(): boolean {
+export function isLoading(nameFilter?: string): boolean {
     // Validity check:
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
 
     if(currentRenderRun.isPassive) {
-        return currentRenderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending");
+        return currentRenderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter));
     }
     currentRenderRun.passiveRenderRequested = true; // Request passive render.
     return false;
 }
 
-export function nextLoading() {
-    // Should we pre-associate index->RecordedLoadCall ?: Or post associate it on the passive run ?
-    // Pre-assoc: We can hide the load statement when loading. But this violates the load structure/order. Can we allow it just for the last one?
-}
-
-export function prevLoading() {
-
-}
 
 /**
  * graph.createProxyFor(props) errors when props's readonly properties are accessed.
