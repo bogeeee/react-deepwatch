@@ -182,6 +182,18 @@ class Frame {
         }
         this.persistent.handleChangeEvent();
     }
+
+    watchPropertyChange(read: Read) {
+        // Re-render on a change of the read value:
+        const changeListener = (newValue: unknown) => {
+            if (currentRenderRun) {
+                throw new Error("You must not modify a watched object during the render run.");
+            }
+            this.handleWatchedPropertyChange();
+        }
+        this.startPropChangeListeningFns.push(() => read.onChange(changeListener));
+        this.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
+    }
 }
 
 
@@ -223,15 +235,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             // Install read listener:
             let readListener = (read: RecordedRead)  => {
                 if(!renderRun.isPassive) { // Active run ?
-                    // Re-render on a change of the read value:
-                    const changeListener = (newValue: unknown) => {
-                        if (currentRenderRun) {
-                            throw new Error("You must not modify a watched object during the render run.");
-                        }
-                        frame.handleWatchedPropertyChange();
-                    }
-                    frame.startPropChangeListeningFns.push(() => read.onChange(changeListener));
-                    frame.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
+                    frame.watchPropertyChange(read);
                 }
 
                 renderRun.recordedReads.push(read);
@@ -371,7 +375,7 @@ export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
 export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}): any {
     // Wording:
     // - "previous" means: load(...) statements more upwards in the user's code
-    // - "last" means: this load call but from a past render run.
+    // - "last" means: this load call but from a past frame
 
     // Validity checks:
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
@@ -462,8 +466,11 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
                 if (hasFallback) { // Fallback specified ?
                     return {result: options.fallback};
                 }
+
+                lastLoadCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
                 throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
             } else if (lastLoadCall.result.state === "rejected") {
+                lastLoadCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
                 throw lastLoadCall.result.rejectReason;
             } else {
                 throw new Error("Invalid state of lastLoadCall.result.state")
@@ -474,17 +481,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
         if (canReuse !== false) { // can re-use ?
             const lastCall = persistent.loadCalls[renderRun.loadCallIndex];
 
-            lastCall.recordedReadsInsideLoaderFn.forEach(read => {
-                // Re-render on a change of the read value:
-                const changeListener = (newValue: unknown) => {
-                    if (currentRenderRun) {
-                        throw new Error("You must not modify a watched object during the render run.");
-                    }
-                    frame.handleWatchedPropertyChange();
-                }
-                frame.startPropChangeListeningFns .push(() => read.onChange (changeListener));
-                frame.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
-            })
+            lastCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn
 
             return canReuse.result; // return proxy'ed result from last call:
         }
