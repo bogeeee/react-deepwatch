@@ -43,18 +43,18 @@ class RecordedLoadCall {
 class WatchedComponentPersistent {
     loadCalls: RecordedLoadCall[] = [];
 
-    currentFrame!: Frame
+    currentFrame?: Frame
 
     /**
-     * Short-lived/parameter-like flag, to start a passive render
+     * RenderRun: A passive render is requested. Save reference to the render run a safety check
      */
-    nextRenderIsPassive=false;
+    reRenderRequested: boolean | RenderRun = false;
 
     _doReRender!: () => void
 
     debug_tag?: string;
 
-    doReRender() {
+    protected doReRender() {
         // Call listeners:
         this.onBeforeReRenderListeners.forEach(fn => fn());
         this.onBeforeReRenderListeners = [];
@@ -62,12 +62,39 @@ class WatchedComponentPersistent {
         this._doReRender()
     }
 
+    requestReRender(passiveFromRenderRun?: RenderRun) {
+        const wasAlreadyRequested = this.reRenderRequested !== false;
+
+        // Enable the reRenderRequested flag:
+        if(passiveFromRenderRun !== undefined && this.reRenderRequested !== true) {
+            this.reRenderRequested = passiveFromRenderRun;
+        }
+        else {
+            this.reRenderRequested = true;
+        }
+
+        if(wasAlreadyRequested) {
+            return;
+        }
+
+        // Do the re-render:
+        if(currentRenderRun !== undefined) {
+            // Must defer it because we cannot call rerender from inside a render function
+            setTimeout(() => {
+                this.doReRender();
+            })
+        }
+        else {
+            this.doReRender();
+        }
+    }
+
     /**
      * When a load finished or finished with error, or when a watched value changed. So the component needs to be rerendered
      */
     handleChangeEvent() {
-        this.currentFrame.dismissErrorBoundary?.();
-        this.doReRender();
+        this.currentFrame!.dismissErrorBoundary?.();
+        this.requestReRender();
     }
 
     hadASuccessfullMount = false;
@@ -88,7 +115,7 @@ class RenderRun {
      * Set when isLoading or someError is called.
      * Note: Looks to be redundant to WatchedComponentPersistent#nextRenderIsPassive on the first view, but it's safer to set this here and keep the other one very short-lived, because who knows what concurrent re-renders will fire when and are then run falsely passive.
      */
-    passiveRenderRequested=false;
+    needsAnotherPassiveRender=false;
 
     recordedReads: RecordedRead[] = [];
 
@@ -118,7 +145,7 @@ class RenderRun {
      * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
      */
     handleEffectCleanup() {
-        if (this.passiveRenderRequested) {
+        if (this.needsAnotherPassiveRender) {
             return; // clean up next time after passive render
         }
 
@@ -150,6 +177,11 @@ class Frame {
      */
     result!: RenderRun | undefined | Promise<unknown> | Error | unknown;
 
+    /**
+     * The most recent render run
+     */
+    recentRenderRun?: RenderRun;
+
     persistent!: WatchedComponentPersistent;
 
     /**
@@ -173,6 +205,10 @@ class Frame {
 
     cleanUpPropChangeListenerFns: (()=>void)[] = [];
     cleanup() {
+        if(this.cleanedUp) {
+            return;
+        }
+
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
         this.cleanedUp = true;
     }
@@ -204,8 +240,14 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [persistent] = useState(new WatchedComponentPersistent());
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
+        const isPassive = persistent.currentFrame?.recentRenderRun !== undefined && persistent.reRenderRequested === persistent.currentFrame.recentRenderRun; // Set that flag very shy, so another render run in the meanwhile or a non-passive rerender request will dominate
+
+        if(!isPassive && persistent.currentFrame?.recentRenderRun?.needsAnotherPassiveRender) { // Frame thought there will be a following passive render, so it did not clean up yet?
+            persistent.currentFrame.cleanup();
+        }
+
         // Create frame:
-        let frame = !persistent.nextRenderIsPassive ? new Frame() : persistent.currentFrame;
+        let frame = isPassive && persistent.currentFrame !== undefined ? persistent.currentFrame : new Frame();
         persistent.currentFrame = frame;
         frame.persistent = persistent;
 
@@ -213,9 +255,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         currentRenderRun === undefined || throwError("Illegal state: already in currentRenderRun");
         const renderRun = currentRenderRun = new RenderRun();
         renderRun.frame = frame;
-        renderRun.isPassive = persistent.nextRenderIsPassive;
+        renderRun.isPassive = isPassive;
 
-        persistent.nextRenderIsPassive = false;
+        frame.recentRenderRun = currentRenderRun;
+
+        persistent.reRenderRequested = false;
+
 
         // Register dismissErrorBoundary function:
         if(typeof useErrorBoundary === "function") { // Optional package was loaded?
@@ -247,7 +292,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 return componentFn(watchedProps); // Run the user's component function
             }
             catch (e) {
-                if(renderRun.passiveRenderRequested) {
+                if(renderRun.needsAnotherPassiveRender) {
                     return createElement(Fragment, null); // Don't go to suspense **now**. The passive render might have a different outcome. (rerender will be done, see "finally")
                 }
 
@@ -286,14 +331,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             currentRenderRun = undefined;
 
             //Safety check:
-            (renderRun.isPassive && renderRun.passiveRenderRequested) && throwError("Illegal state");
-
-            if(renderRun.passiveRenderRequested) {
-                setTimeout(() => { // Must use setTimeout, cause we cannot re-render through setState from the render code.  // TODO: Fix race conditions with handleWatchedPropertyChange or handleLoadedValueChange and their rerender is now the passive one.
-                    persistent.nextRenderIsPassive = true;
-                    persistent.doReRender();
-                })
-            }
+            (renderRun.isPassive && renderRun.needsAnotherPassiveRender) && throwError("Illegal state");
         }
     }
 }
@@ -561,7 +599,8 @@ export function isLoading(nameFilter?: string): boolean {
     if(currentRenderRun.isPassive) {
         return currentRenderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter));
     }
-    currentRenderRun.passiveRenderRequested = true; // Request passive render.
+    currentRenderRun.needsAnotherPassiveRender = true;
+    currentRenderRun.frame.persistent.requestReRender(currentRenderRun) // Request passive render.
     return false;
 }
 
