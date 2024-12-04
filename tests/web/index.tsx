@@ -138,13 +138,15 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 
     const globalCounter = state.globalCounter;
 
+    const theRenderCounter = renderCounter("expected to increase reasonably" );
+
     if(state.withIsLoadingIndicator && isLoading()) {
         //return "🌀 "
     }
 
     return <div>
         <h3>MultipleLoadsInALoop</h3>
-        {renderCounter("expected to increase reasonably" )}
+        {theRenderCounter}
         {(state.withIsLoadingIndicator && isLoading())?"🌀 ":null}
         {state.items.map(item => <div key={item.name}>
             <b>{item.name}</b>&#160;
