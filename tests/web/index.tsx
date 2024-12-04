@@ -131,6 +131,7 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
     const state = useWatchedState({
         withFallbacks: false,
         withIsLoadingIndicator: false,
+        returnOnIsLoading: false,
         critical: true,
         globalCounter:0,
         items: [{name: "item1", counter:0},{name: "item2", counter:0},{name: "item3", counter:0},{name: "item4", counter:0}]
@@ -140,8 +141,8 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 
     const theRenderCounter = renderCounter("expected to increase reasonably" );
 
-    if(state.withIsLoadingIndicator && isLoading()) {
-        //return "🌀 "
+    if(state.withIsLoadingIndicator && state.returnOnIsLoading && isLoading()) {
+        return "🌀 "
     }
 
     return <div>
@@ -161,6 +162,8 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
             state.withFallbacks = event.target.checked}} />withFallbacks
         <input type="checkbox" checked={state.withIsLoadingIndicator} onChange={(event) => {
             state.withIsLoadingIndicator = event.target.checked}} />with isLoading() indicator
+        <input type="checkbox" disabled={!state.withIsLoadingIndicator} checked={state.returnOnIsLoading} onChange={(event) => {
+        state.returnOnIsLoading = event.target.checked}} />return on isLoading()
         <input type="checkbox" checked={state.critical} onChange={(event) => {
             state.critical = event.target.checked}} />critical
 
