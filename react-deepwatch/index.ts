@@ -103,58 +103,6 @@ class WatchedComponentPersistent {
 }
 
 /**
- * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent.
- * - References to this can still exist when WatchedComponentPersistent is in a resumeable error state (is this a good idea? )
- */
-class RenderRun {
-    frame!: Frame;
-
-    isPassive=false;
-
-    /**
-     * Set when isLoading or someError is called.
-     * Note: Looks to be redundant to WatchedComponentPersistent#nextRenderIsPassive on the first view, but it's safer to set this here and keep the other one very short-lived, because who knows what concurrent re-renders will fire when and are then run falsely passive.
-     */
-    needsAnotherPassiveRender=false;
-
-    recordedReads: RecordedRead[] = [];
-
-
-    /**
-     * Increased, when we see a load(...) call
-     */
-    loadCallIndex = 0;
-
-    /**
-     * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
-     */
-    somePending?: Promise<unknown>;
-    somePendingAreCritical = false;
-
-    /**
-     * Body of useEffect
-     */
-    handleEffectSetup() {
-        this.frame.persistent.hadASuccessfullMount = true;
-        this.frame.startListeningForPropertyChanges();
-    }
-
-    /**
-     * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
-     */
-    handleEffectCleanup() {
-        if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
-            // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
-        }
-        else {
-            this.frame.stopListeningForPropertyChanges(); // Clean up now
-        }
-    }
-}
-let currentRenderRun: RenderRun| undefined;
-
-/**
  *
  * Lifecycle: Render + optional passive render + timespan until the next render (=because something new happened) or complete unmount.
  * Note: In case of an error and wrapped in a recoverable <ErrorBoundary>, the may not even be a mount but this Frame still exist.
@@ -217,6 +165,57 @@ class Frame {
     }
 }
 
+/**
+ * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent.
+ * - References to this can still exist when WatchedComponentPersistent is in a resumeable error state (is this a good idea? )
+ */
+class RenderRun {
+    frame!: Frame;
+
+    isPassive=false;
+
+    /**
+     * Set when isLoading or someError is called.
+     * Note: Looks to be redundant to WatchedComponentPersistent#nextRenderIsPassive on the first view, but it's safer to set this here and keep the other one very short-lived, because who knows what concurrent re-renders will fire when and are then run falsely passive.
+     */
+    needsAnotherPassiveRender=false;
+
+    recordedReads: RecordedRead[] = [];
+
+
+    /**
+     * Increased, when we see a load(...) call
+     */
+    loadCallIndex = 0;
+
+    /**
+     * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
+     */
+    somePending?: Promise<unknown>;
+    somePendingAreCritical = false;
+
+    /**
+     * Body of useEffect
+     */
+    handleEffectSetup() {
+        this.frame.persistent.hadASuccessfullMount = true;
+        this.frame.startListeningForPropertyChanges();
+    }
+
+    /**
+     * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
+     */
+    handleEffectCleanup() {
+        if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
+            // Still listen for property changes to be able to recover from errors
+            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
+        }
+        else {
+            this.frame.stopListeningForPropertyChanges(); // Clean up now
+        }
+    }
+}
+let currentRenderRun: RenderRun| undefined;
 
 export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
     return (props: PROPS) => {
