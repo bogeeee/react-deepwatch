@@ -106,6 +106,13 @@ class WatchedComponentPersistent {
         this.requestReRender();
     }
 
+    /**
+     * @returns boolean it looks like ... (passive is very shy) unless another render run in the meanwhile or a non-passive rerender request will dominate
+     */
+    nextReRenderMightBePassive() {
+        return this.currentFrame?.recentRenderRun !== undefined && this.reRenderRequested === this.currentFrame.recentRenderRun;
+    }
+
 }
 
 /**
@@ -194,12 +201,6 @@ class RenderRun {
 
     isPassive=false;
 
-    /**
-     * Set when isLoading or someError is called.
-     * Note: Looks to be redundant to WatchedComponentPersistent#nextRenderIsPassive on the first view, but it's safer to set this here and keep the other one very short-lived, because who knows what concurrent re-renders will fire when and are then run falsely passive.
-     */
-    needsAnotherPassiveRender=false;
-
     recordedReads: RecordedRead[] = [];
 
 
@@ -207,6 +208,8 @@ class RenderRun {
      * Increased, when we see a load(...) call
      */
     loadCallIndex = 0;
+
+    onFinallyAfterRenderListeners: (()=>void)[] = [];
 
     /**
      * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
@@ -247,12 +250,11 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [persistent] = useState(new WatchedComponentPersistent());
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
-        const isPassive = persistent.currentFrame?.recentRenderRun !== undefined && persistent.reRenderRequested === persistent.currentFrame.recentRenderRun; // Set that flag very shy, so another render run in the meanwhile or a non-passive rerender request will dominate
-
         // Call listeners (again) because may be the render was not "requested" through code in this package but happened some other way:
         persistent.onceOnReRenderListeners.forEach(fn => fn());
         persistent.onceOnReRenderListeners = [];
 
+        const isPassive = persistent.nextReRenderMightBePassive()
         persistent.reRenderRequested = false;
         
         // Create frame:
@@ -298,7 +300,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 return componentFn(watchedProps); // Run the user's component function
             }
             catch (e) {
-                if(renderRun.needsAnotherPassiveRender) {
+                if(persistent.nextReRenderMightBePassive()) {
                     return createElement(Fragment, null); // Don't go to suspense **now**. The passive render might have a different outcome. (rerender will be done, see "finally")
                 }
 
@@ -326,14 +328,13 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
             finally {
                 frame.watchedGraph.offAfterRead(readListener);
+
+                renderRun.onFinallyAfterRenderListeners.forEach(l => l()); // Call listeners
             }
         }
         finally {
             renderRun.recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
             currentRenderRun = undefined;
-
-            //Safety check:
-            (renderRun.isPassive && renderRun.needsAnotherPassiveRender) && throwError("Illegal state");
         }
     }
 }
@@ -592,15 +593,34 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
  *
  */
 export function isLoading(nameFilter?: string): boolean {
+    const renderRun = currentRenderRun;
     // Validity check:
-    if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
+    if(renderRun === undefined) throw new Error("isLoading is not used from inside a WatchedComponent")
 
-    if(currentRenderRun.isPassive) {
-        return currentRenderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter));
+    return probe(() => renderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
+}
+
+/**
+ * For isLoading and isError. Makes a passive render run if these a
+ * @param probeFn
+ * @param defaultResult
+ */
+function probe<T>(probeFn: () => T, defaultResult: T) {
+    const renderRun = currentRenderRun;
+    // Validity check:
+    if(renderRun === undefined) throw new Error("Not used from inside a WatchedComponent")
+
+    if(renderRun.isPassive) {
+        return probeFn();
     }
-    currentRenderRun.needsAnotherPassiveRender = true;
-    currentRenderRun.frame.persistent.requestReRender(currentRenderRun) // Request passive render.
-    return false;
+
+    renderRun.onFinallyAfterRenderListeners.push(() => {
+        if(probeFn() !== defaultResult) {
+            renderRun.frame.persistent.requestReRender(currentRenderRun) // Request passive render.
+        }
+    })
+
+    return defaultResult;
 }
 
 
