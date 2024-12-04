@@ -52,12 +52,21 @@ class WatchedComponentPersistent {
 
     _doReRender!: () => void
 
+    hadASuccessfullMount = false;
+
+    /**
+     * Called either before or on the render
+     */
+    onceOnReRenderListeners: (()=>void)[] = [];
+
+    onceOnEffectCleanupListeners: (()=>void)[] = [];
+
     debug_tag?: string;
 
     protected doReRender() {
         // Call listeners:
-        this.onBeforeReRenderListeners.forEach(fn => fn());
-        this.onBeforeReRenderListeners = [];
+        this.onceOnReRenderListeners.forEach(fn => fn());
+        this.onceOnReRenderListeners = [];
 
         this._doReRender()
     }
@@ -97,9 +106,6 @@ class WatchedComponentPersistent {
         this.requestReRender();
     }
 
-    hadASuccessfullMount = false;
-
-    onBeforeReRenderListeners: (()=>void)[] = [];
 }
 
 /**
@@ -132,6 +138,8 @@ class Frame {
      */
     dismissErrorBoundary?: () => void;
 
+    isListeningForPropChanges = false;
+
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
         // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
@@ -140,12 +148,24 @@ class Frame {
 
     startPropChangeListeningFns: (()=>void)[] = [];
     startListeningForPropertyChanges() {
-        this.startPropChangeListeningFns.forEach(c => c()); // Clean the listeners
+        if(this.isListeningForPropChanges) {
+            return;
+        }
+
+        this.startPropChangeListeningFns.forEach(c => c());
+
+        this.isListeningForPropChanges = true;
     }
 
     cleanUpPropChangeListenerFns: (()=>void)[] = [];
     stopListeningForPropertyChanges() {
+        if(!this.isListeningForPropChanges) {
+            return;
+        }
+
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
+
+        this.isListeningForPropChanges = false;
     }
 
     handleWatchedPropertyChange() {
@@ -206,9 +226,13 @@ class RenderRun {
      * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
      */
     handleEffectCleanup() {
+        // Call listeners:
+        this.frame.persistent.onceOnEffectCleanupListeners.forEach(fn => fn());
+        this.frame.persistent.onceOnEffectCleanupListeners = [];
+
         if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
+            this.frame.persistent.onceOnReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners next time
         }
         else {
             this.frame.stopListeningForPropertyChanges(); // Clean up now
@@ -224,6 +248,11 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
         const isPassive = persistent.currentFrame?.recentRenderRun !== undefined && persistent.reRenderRequested === persistent.currentFrame.recentRenderRun; // Set that flag very shy, so another render run in the meanwhile or a non-passive rerender request will dominate
+
+        // Call listeners (again) because may be the render was not "requested" through code in this package but happened some other way:
+        persistent.onceOnReRenderListeners.forEach(fn => fn());
+        persistent.onceOnReRenderListeners = [];
+
         persistent.reRenderRequested = false;
         
         // Create frame:
@@ -292,9 +321,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                     if(frame.dismissErrorBoundary !== undefined) { // inside  (recoverable) error boundary ?
                         // The useEffects won't fire, so whe simulate the frame's effect lifecycle here:
                         frame.startListeningForPropertyChanges();
-                        persistent.onBeforeReRenderListeners.push(() => {
-                            frame.stopListeningForPropertyChanges()
-                        });
+                        persistent.onceOnReRenderListeners.push(() => {frame.stopListeningForPropertyChanges()});
                     }
                 }
                 throw e;
