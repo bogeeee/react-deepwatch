@@ -136,25 +136,19 @@ class RenderRun {
      */
     handleEffectSetup() {
         this.frame.persistent.hadASuccessfullMount = true;
-        if(!this.isPassive) {
-            this.frame.startListeningForPropertyChanges();
-        }
+        this.frame.startListeningForPropertyChanges();
     }
 
     /**
      * Called by useEffect before the next render oder before unmount(for suspense, for error or forever)
      */
     handleEffectCleanup() {
-        if (this.needsAnotherPassiveRender) {
-            return; // clean up next time after passive render
-        }
-
         if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.cleanup()}); //Instead clean up listeners on next render
+            this.frame.persistent.onBeforeReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners on next render
         }
         else {
-            this.frame.cleanup(); // Clean up now
+            this.frame.stopListeningForPropertyChanges(); // Clean up now
         }
     }
 }
@@ -190,8 +184,6 @@ class Frame {
      */
     dismissErrorBoundary?: () => void;
 
-    cleanedUp = false;
-
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
         // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
@@ -204,19 +196,11 @@ class Frame {
     }
 
     cleanUpPropChangeListenerFns: (()=>void)[] = [];
-    cleanup() {
-        if(this.cleanedUp) {
-            return;
-        }
-
+    stopListeningForPropertyChanges() {
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
-        this.cleanedUp = true;
     }
 
     handleWatchedPropertyChange() {
-        if(this.cleanedUp) {
-            throw new Error("Illegal state: This render run has already be cleaned up. There must not be any more listeners left that call here.");
-        }
         this.persistent.handleChangeEvent();
     }
 
@@ -241,11 +225,8 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
         const isPassive = persistent.currentFrame?.recentRenderRun !== undefined && persistent.reRenderRequested === persistent.currentFrame.recentRenderRun; // Set that flag very shy, so another render run in the meanwhile or a non-passive rerender request will dominate
-
-        if(!isPassive && persistent.currentFrame?.recentRenderRun?.needsAnotherPassiveRender) { // Frame thought there will be a following passive render, so it did not clean up yet?
-            persistent.currentFrame.cleanup();
-        }
-
+        persistent.reRenderRequested = false;
+        
         // Create frame:
         let frame = isPassive && persistent.currentFrame !== undefined ? persistent.currentFrame : new Frame();
         persistent.currentFrame = frame;
@@ -256,10 +237,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const renderRun = currentRenderRun = new RenderRun();
         renderRun.frame = frame;
         renderRun.isPassive = isPassive;
-
         frame.recentRenderRun = currentRenderRun;
-
-        persistent.reRenderRequested = false;
 
 
         // Register dismissErrorBoundary function:
@@ -316,7 +294,7 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                         // The useEffects won't fire, so whe simulate the frame's effect lifecycle here:
                         frame.startListeningForPropertyChanges();
                         persistent.onBeforeReRenderListeners.push(() => {
-                            frame.cleanup()
+                            frame.stopListeningForPropertyChanges()
                         });
                     }
                 }
