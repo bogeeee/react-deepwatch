@@ -306,12 +306,10 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(e instanceof Promise) {
                     if(!persistent.hadASuccessfullMount) {
                         // Handle the suspense ourself. Cause the react Suspense does not restore the state by useState :(
-                        e.finally(() => {persistent.handleChangeEvent()})
                         return createElement(Fragment, null); // Return an empty element (might cause a short screen flicker) and render again.
                     }
 
                     if(options.fallback) {
-                        e.finally(() => {persistent.handleChangeEvent()})
                         return options.fallback;
                     }
 
@@ -553,10 +551,18 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
-                loadCall.result = {state: "resolved", resolvedValue: value}
-            })
+                loadCall.result = {state: "resolved", resolvedValue: value};
+
+                if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
+                    // Loaded value did not change / No re-render needed because the fallback is already displayed
+                } else {
+                        persistent.handleChangeEvent();
+                }
+            });
             resultPromise.catch(reason => {
                 loadCall.result = {state: "rejected", rejectReason: reason}
+
+                persistent.handleChangeEvent(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
             })
             loadCall.result = {state: "pending", promise: resultPromise};
 
@@ -565,22 +571,11 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
             renderRun.somePending = resultPromise;
             renderRun.somePendingAreCritical ||= (options.critical !== false);
 
-            if (hasFallback) { // Fallback specified ?
-                loadCall.result.promise.then((result) => {
-                    if(result === null || (!(typeof result === "object")) && result === options.fallback) { // Result is primitive and same as fallback ?
-                        // Loaded value did not change / No re-render needed because the fallback is already displayed
-                    }
-                    else {
-                        persistent.handleChangeEvent();
-                    }
-                })
-                loadCall.result.promise.catch((error) => {
-                    persistent.handleChangeEvent(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
-                })
+            if (hasFallback) {
                 return options.fallback!;
+            } else {
+                throw resultPromise; // Throwing a promise will put the react component into suspense state
             }
-
-            throw resultPromise; // Throwing a promise will put the react component into suspense state
         }
     }
 
