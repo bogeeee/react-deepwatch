@@ -36,7 +36,7 @@ const MyComponent = WatchedComponent(props => {
 Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
 
 ````jsx
-import {WatchedComponent, load} from "react-deepwatch"
+import {WatchedComponent, load, isLoading, loadFailed} from "react-deepwatch"
 
 const MyComponent = WatchedComponent(props => {
 
@@ -53,13 +53,16 @@ _👍 load(...) can be inside a conditional block or a loop. Then it has already
 
 ### Show a 🌀loading spinner
 To show a 🌀loading spinner / placeholder during load, either...
- - wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense). It can be wrapped at any parent level😎.
- - or use `isLoading()` inside your component, to probe if any or a certain `load(...)`statement is loading. _Mind the caveat of not using it for a condition to cut off a load statement. See jsDoc._   
- - and/or specify a `fallback` value via `load(..., {fallback:"🌀"})`.
+ - **wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense)**. It can be wrapped at any parent level😎. _Or..._
+ - **call isLoading()** inside your component, to probe if any or a certain `load(...)`statement is loading. _See jsDoc for usage example. Mind the caveat of not using it for a condition to cut off a load statement._ _and/or..._   
+ - **specify a fallback** value via `load(..., {fallback:"🌀"})`.
 
 ### Handle errors
-As with the above, you can **wrap your component in a** [`<ErrorBoundary fallback={<div>Something went wrong</div>}>...<MyComponent/>...</ErrorBoundary>`](https://github.com/bvaughn/react-error-boundary) from the [react-error-boundary](https://github.com/bvaughn/react-error-boundary) package, to handle load errors. It can be wrapped at any parent level😎.  
-It tries to recover from errors and re- runs the `loaderFn`, whenever a dependency changes. Note that recovering works only with the mentioned [react-error-boundary 4.x](https://github.com/bvaughn/react-error-boundary) and not with 3rd party error-boundary libraries.
+either...
+ - **wrap your component in a** [`<ErrorBoundary fallback={<div>Something went wrong</div>}>...<MyComponent/>...</ErrorBoundary>`](https://github.com/bvaughn/react-error-boundary) from the [react-error-boundary](https://github.com/bvaughn/react-error-boundary) package. It can be wrapped at any parent level😎.  
+   It tries to recover from errors and re- runs the `loaderFn`, whenever a dependency changes. Note that recovering works only with the mentioned [react-error-boundary 4.x](https://github.com/bvaughn/react-error-boundary) and not with 3rd party error-boundary libraries. _Or..._
+ - **try/catch around the load(...)** statement. Caveat: You must check, if caught is `instanceof Promise` and re-throw it then. _Because this is the way for `load` to signal, that things are loading._ _Or..._
+ - **call** the **loadFailed()** probing function. This looks more elegant than the above. _See jsDoc for usage example._
 
 ### Performance optimization for load(...)
 To reduce the number of expensive `myFetchFromServer` calls, try the following:
@@ -69,7 +72,6 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 ### Caveats
 - The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponent#fallback`.
 - `<Suspense>` and `<ErrorBoundary>` inside your component function do not handle/catch loads in that **same** function. _Means: You must place them outside to handle/catch them._
-- When **try/catch' ing around `load(...)`** statements, you must check, if caught is `instanceof Promise` and re-throw it then. _Because this is the way for `load` to signal, that things are loading._
 - SSR is not supported.
 - [startTransition](https://react.dev/reference/react/startTransition) is not supported (has no effect).
 

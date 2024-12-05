@@ -209,7 +209,7 @@ class RenderRun {
      */
     loadCallIndex = 0;
 
-    onFinallyAfterRenderListeners: (()=>void)[] = [];
+    onFinallyAfterUsersComponentFnListeners: (()=>void)[] = [];
 
     /**
      * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
@@ -297,7 +297,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             frame.watchedGraph.onAfterRead(readListener)
 
             try {
-                return componentFn(watchedProps); // Run the user's component function
+                try {
+                    return componentFn(watchedProps); // Run the user's component function
+                }
+                finally {
+                    renderRun.onFinallyAfterUsersComponentFnListeners.forEach(l => l()); // Call listeners
+                }
             }
             catch (e) {
                 if(persistent.nextReRenderMightBePassive()) {
@@ -328,8 +333,6 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
             finally {
                 frame.watchedGraph.offAfterRead(readListener);
-
-                renderRun.onFinallyAfterRenderListeners.forEach(l => l()); // Call listeners
             }
         }
         finally {
@@ -587,6 +590,14 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
  * Probe if a <code>load(...)</code> statement directly inside this watchedComponent is currently loading.
  * Note: It's mostly needed to also specify a {@link LoadOptions#fallback} in the load statement's options to produce a valid render result while loading. Otherwise the whole component goes into suspense.
  * <p>
+ * Example. This uses isLoading() to determine if the Dropdown list should be faded/transparent during while items are loading:
+ * <pre><code>
+ *     return  <select style={{opacity: isLoading("dropdownItems")?0.5:1}}>
+ *                 {load(() => fetchMyDropdownItems(), {name: "dropdownItems", fallback: ["loading items"]}).map(i => <option value="{i}">{i}</option>)}
+ *     </select>
+ * </code></pre>
+ * </p>
+ * <p>
  * Caveat: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for isLoading() and the load(...) statements are re-matched by their order.
  * </p>
  * @param nameFilter When set, consider only those with the given {@link LoadOptions#name}. I.e. <code>load(..., {name: "myDropdownListEntries"})</code>
@@ -598,6 +609,34 @@ export function isLoading(nameFilter?: string): boolean {
     if(renderRun === undefined) throw new Error("isLoading is not used from inside a WatchedComponent")
 
     return probe(() => renderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
+}
+
+/**
+ * Probe if a <code>load(...)</code> statement directly inside this watchedComponent failed.
+ * <p>
+ * Example:
+ * <pre><code>
+ *     if(loadFailed()) {
+ *          return <div>Load failed: {loadFailed().message}</div>;
+ *     }
+ *
+ *     return <div>My component content {load(...)} </div>
+ * </code></pre>
+ * </p>
+ * <p>
+ * Caveat: You must not use this for a condition that cuts away a load(...) statement in the middle of your render code. This is because an extra render run is issued for loadFailed() and the load(...) statements are re-matched by their order.
+ * </p>
+ * @param nameFilter When set, consider only those with the given {@link LoadOptions#name}. I.e. <code>load(..., {name: "myDropdownListEntries"})</code>
+ * @returns unknown The thrown value of the loaderFn or undefined if everything is ok.
+ */
+export function loadFailed(nameFilter?: string): unknown {
+    const renderRun = currentRenderRun;
+    // Validity check:
+    if(renderRun === undefined) throw new Error("isLoading is not used from inside a WatchedComponent")
+
+    return probe(() => {
+        return (renderRun.frame.persistent.loadCalls.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
+    }, undefined);
 }
 
 /**
@@ -614,7 +653,7 @@ function probe<T>(probeFn: () => T, defaultResult: T) {
         return probeFn();
     }
 
-    renderRun.onFinallyAfterRenderListeners.push(() => {
+    renderRun.onFinallyAfterUsersComponentFnListeners.push(() => {
         if(probeFn() !== defaultResult) {
             renderRun.frame.persistent.requestReRender(currentRenderRun) // Request passive render.
         }

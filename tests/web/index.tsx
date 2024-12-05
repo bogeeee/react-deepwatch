@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading} from "react-deepwatch/develop";
+import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -194,6 +194,9 @@ const InnerSuspense = WatchedComponent(props => {
 
 const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(props => {
     const model = props.model;
+
+    //if(loadFailed()) return "Load failed: " + loadFailed().message
+
     return <div>
         {!model.canceled?
             <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
@@ -203,6 +206,9 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(pro
 
 const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback = new WatchedComponent(props => {
     const model = props.model;
+
+    //if(loadFailed())  return "Load failed: " + loadFailed().message;
+
     return <div>
         {!model.canceled?
             <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
