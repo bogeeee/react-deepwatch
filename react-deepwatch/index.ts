@@ -72,7 +72,7 @@ class RecordedLoadCall {
         return this.options.name;
     }
 
-    scheduleRePollEndlessly() {
+    activateRegularRePollingIfNeeded() {
         // Check, if we should really schedule:
         this.checkValid();
         if(!this.options.interval) { // Polling not enabled ?
@@ -85,7 +85,7 @@ class RecordedLoadCall {
             return;
         }
         if(this.result.state === "pending") {
-            return; // will call scheduleRePollEndlessly() when load is finished and a rerender is done
+            return; // will call activateRegularRePollingIfNeeded() when load is finished and a rerender is done
         }
 
         this.rePollTimer = setTimeout(async () => {
@@ -112,7 +112,7 @@ class RecordedLoadCall {
             // Re-schedule
             clearTimeout(this.rePollTimer); // Call this to make sure...May be polling has been activated and deactivated in the manwhile during executeRePoll and this.rePollTimer is now another one
             this.rePollTimer = undefined;
-            this.scheduleRePollEndlessly();
+            this.activateRegularRePollingIfNeeded();
         }, this.options.interval); // TODO: Use lastResultTime
     }
 
@@ -137,7 +137,7 @@ class RecordedLoadCall {
         }
     }
 
-    stopScheduledRePoll() {
+    deactivateRegularRePoll() {
         this.checkValid();
         if(this.rePollTimer !== undefined) {
             clearTimeout(this.rePollTimer);
@@ -291,7 +291,7 @@ class Frame {
 
         this.startPropChangeListeningFns.forEach(c => c());
 
-        this.persistent.loadCalls.forEach(lc => lc.scheduleRePollEndlessly()); // Schedule re-polls
+        this.persistent.loadCalls.forEach(lc => lc.activateRegularRePollingIfNeeded()); // Schedule re-polls
 
         this.isListeningForChanges = true;
     }
@@ -307,7 +307,7 @@ class Frame {
 
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
 
-        this.persistent.loadCalls.forEach(lc => lc.stopScheduledRePoll()); // Stop scheduled re-polls
+        this.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // Stop scheduled re-polls
 
         this.isListeningForChanges = false;
     }
@@ -731,10 +731,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
                 if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
                     // Loaded value did not change / No re-render needed because the fallback is already displayed
                     if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
-                        loadCall.scheduleRePollEndlessly();
+                        loadCall.activateRegularRePollingIfNeeded();
                     }
                 } else {
-                        persistent.handleChangeEvent(); // Will also do a rerender and call scheduleRePollEndlessly, like above
+                        persistent.handleChangeEvent(); // Will also do a rerender and call activateRegularRePollingIfNeeded, like above
                 }
             });
             resultPromise.catch(reason => {
