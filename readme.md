@@ -36,7 +36,7 @@ const MyComponent = WatchedComponent(props => {
 Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
 
 ````jsx
-import {WatchedComponent, load, isLoading, loadFailed} from "react-deepwatch"
+import {WatchedComponent, load, poll, isLoading, loadFailed} from "react-deepwatch"
 
 const MyComponent = WatchedComponent(props => {
 
@@ -49,7 +49,7 @@ const MyComponent = WatchedComponent(props => {
 ````
 **`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.  
-_👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎_
+_👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._  
 
 ### Show a 🌀loading spinner
 To show a 🌀loading spinner / placeholder during load, either...
@@ -81,3 +81,5 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 #Further notes
 ### useWatched
 You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props into your component function._
+### poll
+Besides `load`, there's also the `poll` function, which works similar, but in regular intervals. _See jsDoc_

@@ -28,13 +28,134 @@ type WatchedComponentOptions = {
 
 class RecordedLoadCall {
     /**
+     * Back reference to it
+     */
+    watchedComponentPersistent: WatchedComponentPersistent;
+
+    /**
+     * Reference saved only for polling
+     */
+    loaderFn?: () => Promise<unknown>;
+
+    options!: LoadOptions & Partial<PollOptions>;
+
+    /**
      * From the beginning or previous load call up to this one
      */
     recordedReadsBefore!: RecordedRead[];
     recordedReadsInsideLoaderFn!: RecordedRead[];
 
     result!: PromiseState<unknown>;
-    name?: string;
+
+    lastResultTime?: Date;
+
+    /**
+     * Result from setTimeout.
+     * Set, when re-polling is scheduled or running (=the loaderFn is re-running)
+     */
+    rePollTimer?: any;
+
+    /**
+     * index in this.watchedComponentPersistent.loadCalls
+     */
+    cache_index: number;
+
+    get isObsolete() {
+        return !(this.watchedComponentPersistent.loadCalls.length > this.cache_index && this.watchedComponentPersistent.loadCalls[this.cache_index] === this); // this.watchedComponentPersistent.loadCalls does not contain this?
+    }
+
+
+    get name() {
+        return this.options.name;
+    }
+
+    scheduleRePollEndlessly() {
+        // Check, if we should really schedule:
+        this.checkValid();
+        if(!this.options.interval) { // Polling not enabled ?
+            return;
+        }
+        if(this.rePollTimer !== undefined) { // Already scheduled ?
+            return;
+        }
+        if(this.isObsolete) {
+            return;
+        }
+        if(this.result.state === "pending") {
+            return; // will call scheduleRePollEndlessly() when load is finished and a rerender is done
+        }
+
+        this.rePollTimer = setTimeout(async () => {
+            // Check, if we should really execute:
+            this.checkValid();
+            if (this.rePollTimer === undefined) { // Not scheduled anymore / frame not alive?
+                return;
+            }
+            if (this.isObsolete) {
+                return;
+            }
+
+            await this.executeRePoll();
+
+            // Now that some time may have passed, check, again, if we should really schedule the next poll:
+            this.checkValid();
+            if (this.rePollTimer === undefined) { // Not scheduled anymore / frame not alive?
+                return;
+            }
+            if (this.isObsolete) {
+                return;
+            }
+
+            this.rePollTimer = undefined;
+            this.scheduleRePollEndlessly();
+        }, this.options.interval); // TODO: Use lastResultTime
+    }
+
+    /**
+     * Re runs loaderFn
+     */
+    async executeRePoll() {
+        try {
+            const value = await this.loaderFn!();
+            this.result = {state: "resolved", resolvedValue:value}
+
+            const hasFallback = this.options.hasOwnProperty("fallback");
+            if (hasFallback && (value === null || (!(typeof value === "object")) && value === this.options.fallback)) { // Result is primitive and same as fallback ?
+                // Loaded value did not change / No re-render needed because the fallback is already displayed
+            } else {
+                this.watchedComponentPersistent.handleChangeEvent();
+            }
+        }
+        catch (e) {
+            this.result = {state: "rejected", rejectReason: e};
+            this.watchedComponentPersistent.handleChangeEvent();
+        }
+    }
+
+    stopScheduledRePoll() {
+        this.checkValid();
+        if(this.rePollTimer !== undefined) {
+            clearTimeout(this.rePollTimer);
+            this.rePollTimer = undefined;
+        }
+    }
+
+    checkValid() {
+        if(this.result.state === "pending" && this.lastResultTime !== undefined) {
+            throw new Error("Illegal state"); // Assuming, a load call is not re used for fresh loading
+        }
+        if(this.rePollTimer !== undefined && this.result.state === "pending") {
+            throw new Error("Illegal state");
+        }
+    }
+
+
+    constructor(watchedComponentPersistent: WatchedComponentPersistent, loaderFn: (() => Promise<unknown>) | undefined, options: LoadOptions & Partial<PollOptions>, cache_index: number) {
+        this.watchedComponentPersistent = watchedComponentPersistent;
+        this.loaderFn = loaderFn;
+        this.options = options;
+        this.cache_index = cache_index;
+    }
 }
 
 /**
@@ -145,7 +266,7 @@ class Frame {
      */
     dismissErrorBoundary?: () => void;
 
-    isListeningForPropChanges = false;
+    isListeningForChanges = false;
 
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
@@ -154,25 +275,36 @@ class Frame {
     }
 
     startPropChangeListeningFns: (()=>void)[] = [];
-    startListeningForPropertyChanges() {
-        if(this.isListeningForPropChanges) {
+    /**
+     * Makes the frame become "alive". Listens for property changes and re-polls poll(...) statements.
+     * Calling it twice does not hurt.
+     */
+    startListeningForChanges() {
+        if(this.isListeningForChanges) {
             return;
         }
 
         this.startPropChangeListeningFns.forEach(c => c());
 
-        this.isListeningForPropChanges = true;
+        this.persistent.loadCalls.forEach(lc => lc.scheduleRePollEndlessly()); // Schedule re-polls
+
+        this.isListeningForChanges = true;
     }
 
     cleanUpPropChangeListenerFns: (()=>void)[] = [];
-    stopListeningForPropertyChanges() {
-        if(!this.isListeningForPropChanges) {
+    /**
+     * @see startListeningForChanges
+     */
+    stopListeningForChanges() {
+        if(!this.isListeningForChanges) {
             return;
         }
 
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
 
-        this.isListeningForPropChanges = false;
+        this.persistent.loadCalls.forEach(lc => lc.stopScheduledRePoll()); // Stop scheduled re-polls
+
+        this.isListeningForChanges = false;
     }
 
     handleWatchedPropertyChange() {
@@ -222,7 +354,7 @@ class RenderRun {
      */
     handleEffectSetup() {
         this.frame.persistent.hadASuccessfullMount = true;
-        this.frame.startListeningForPropertyChanges();
+        this.frame.startListeningForChanges();
     }
 
     /**
@@ -235,10 +367,10 @@ class RenderRun {
 
         if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onceOnReRenderListeners.push(() => {this.frame.stopListeningForPropertyChanges()}); //Instead clean up listeners next time
+            this.frame.persistent.onceOnReRenderListeners.push(() => {this.frame.stopListeningForChanges()}); //Instead clean up listeners next time
         }
         else {
-            this.frame.stopListeningForPropertyChanges(); // Clean up now
+            this.frame.stopListeningForChanges(); // Clean up now
         }
     }
 }
@@ -320,13 +452,13 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
                         return options.fallback;
                     }
 
-                    // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForPropertyChanges();
+                    // React's <Suspense> seems to keep this component mounted (hidden), so here's no need for an artificial renderRun.startListeningForChanges();
                 }
                 else { // Error?
                     if(frame.dismissErrorBoundary !== undefined) { // inside  (recoverable) error boundary ?
                         // The useEffects won't fire, so whe simulate the frame's effect lifecycle here:
-                        frame.startListeningForPropertyChanges();
-                        persistent.onceOnReRenderListeners.push(() => {frame.stopListeningForPropertyChanges()});
+                        frame.startListeningForChanges();
+                        persistent.onceOnReRenderListeners.push(() => {frame.stopListeningForChanges()});
                     }
                 }
                 throw e;
@@ -420,9 +552,40 @@ type LoadOptions = {
      */
     name?: string
 }
+type PollOptions = {
+    interval: number
+}
+
+/**
+ * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
+ * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
+ * <p>
+ * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * </p>
+ * @param loaderFn
+ * @param options
+ */
 export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<LoadOptions, "fallback">): T
+/**
+ * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
+ * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
+ * <p>
+ * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * </p>
+ * @param loaderFn
+ * @param options
+ */
 export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
-export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}): any {
+/**
+ * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
+ * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
+ * <p>
+ * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * </p>
+ * @param loaderFn
+ * @param options
+ */
+export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Partial<PollOptions> = {}): any {
     // Wording:
     // - "previous" means: load(...) statements more upwards in the user's code
     // - "last" means: this load call but from a past frame
@@ -437,6 +600,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
     const persistent = frame.persistent;
     const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
     let lastLoadCall = renderRun.loadCallIndex < persistent.loadCalls.length?persistent.loadCalls[renderRun.loadCallIndex]:undefined;
+    if(lastLoadCall) {
+        lastLoadCall.loaderFn = options.interval ? loaderFn : undefined; // only needed, when polling.
+        lastLoadCall.options = options; // Update options. It is allowed that these can change over time. I.e. the poll interval or the name.
+    }
 
     try {
         if(renderRun.isPassive) {
@@ -548,8 +715,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 
             // *** make a loadCall / exec loaderFn ***:
 
-            let loadCall = new RecordedLoadCall();
-            loadCall.name = options.name;
+            let loadCall = new RecordedLoadCall(persistent, options.interval?loaderFn:undefined, options, renderRun.loadCallIndex);
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
@@ -559,8 +725,11 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions = {}
 
                 if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
                     // Loaded value did not change / No re-render needed because the fallback is already displayed
+                    if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
+                        loadCall.scheduleRePollEndlessly();
+                    }
                 } else {
-                        persistent.handleChangeEvent();
+                        persistent.handleChangeEvent(); // Will also do a rerender and call scheduleRePollEndlessly, like above
                 }
             });
             resultPromise.catch(reason => {
@@ -637,6 +806,45 @@ export function loadFailed(nameFilter?: string): unknown {
     return probe(() => {
         return (renderRun.frame.persistent.loadCalls.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
     }, undefined);
+}
+
+/**
+ * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
+ * <p>
+ * Polling is still continued in recoverable error cases, when
+ * </p>
+ *  - loaderFn fails but your watchedComponent catches it and returns fine.
+ *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
+ *
+ * @param loaderFn
+ * @param options
+ */
+export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: Omit<LoadOptions, "fallback"> & PollOptions): T
+/**
+ * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
+ * <p>
+ * Polling is still continued in recoverable error cases, when
+ * </p>
+ *  - loaderFn fails but your watchedComponent catches it and returns fine.
+ *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
+ *
+ * @param loaderFn
+ * @param options
+ */
+export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK} & PollOptions): T | FALLBACK
+/**
+ * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
+ * <p>
+ * Polling is still continued in recoverable error cases, when
+ * </p>
+ *  - loaderFn fails but your watchedComponent catches it and returns fine.
+ *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
+ *
+ * @param loaderFn
+ * @param options
+ */
+export function poll(loaderFn: () => Promise<unknown>, options: LoadOptions & PollOptions): any {
+    return load(loaderFn, options);
 }
 
 /**

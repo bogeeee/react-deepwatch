@@ -134,7 +134,7 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
         returnOnIsLoading: false,
         critical: true,
         globalCounter:0,
-        items: [{name: "item1", counter:0},{name: "item2", counter:0},{name: "item3", counter:0},{name: "item4", counter:0}]
+        items: [{name: "item1", counter:0, poll:false},{name: "item2", counter:0, poll: false},{name: "item3", counter:0, poll:false},{name: "item4", counter:0, poll:false}]
     });
 
     const globalCounter = state.globalCounter;
@@ -153,9 +153,10 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
                 delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`, 500),
-            {name: item.name,...(state.withFallbacks?{fallback: "fallback", critical: state.critical}:{})}
+            {name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: "fallback", critical: state.critical}:{})}
         )}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
+            &#160;<input type="checkbox" checked={item.poll} onChange={(event) => {item.poll = event.target.checked}} />poll
         </div>)}
 
         <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
