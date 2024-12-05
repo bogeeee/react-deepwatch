@@ -109,6 +109,8 @@ class RecordedLoadCall {
                 return;
             }
 
+            // Re-schedule
+            clearTimeout(this.rePollTimer); // Call this to make sure...May be polling has been activated and deactivated in the manwhile during executeRePoll and this.rePollTimer is now another one
             this.rePollTimer = undefined;
             this.scheduleRePollEndlessly();
         }, this.options.interval); // TODO: Use lastResultTime
