@@ -8,6 +8,8 @@ export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: R
 
 let watchedGraph: WatchedGraph | undefined
 
+let debug_idGenerator=0;
+
 type WatchedComponentOptions = {
     /**
      * A fallback react tree to show when some `load(...)` statement in <strong>this</strong> component is loading.
@@ -27,6 +29,7 @@ type WatchedComponentOptions = {
 }
 
 class RecordedLoadCall {
+    debug_id = ++debug_idGenerator;
     /**
      * Back reference to it
      */
@@ -811,11 +814,17 @@ export function loadFailed(nameFilter?: string): unknown {
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
+ *     TODO: Example
+ * </p>
+ * <p>
  * Polling is still continued in recoverable error cases, when
  * </p>
  *  - loaderFn fails but your watchedComponent catches it and returns fine.
  *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
  *
+ * <p>
+ *     Note, that after the initial load, re-polling is done <strong>very silently</strong>. Meaning, there's no suspense / fallback / isLoading indicator involved.
+ * </p>
  * @param loaderFn
  * @param options
  */
