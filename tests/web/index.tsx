@@ -152,7 +152,10 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
         {state.items.map(item => <div key={item.name}>
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
-                delayed(() => `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`, 500),
+                delayed(() => {
+                    if(item.name === "item3") { return `counter: ${item.counter} (no fetch stats. polling should not re-render)`}
+                    return `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`
+                }, 500),
             {name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: "fallback", critical: state.critical}:{})}
         )}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
