@@ -50,7 +50,7 @@ class RecordedLoadCall {
 
     result!: PromiseState<unknown>;
 
-    lastResultTime?: Date;
+    lastExecTime?: Date;
 
     /**
      * Result from setTimeout.
@@ -70,6 +70,16 @@ class RecordedLoadCall {
 
     get name() {
         return this.options.name;
+    }
+
+    async exec() {
+        try {
+            if(this.options.fixedInterval !== false) this.lastExecTime = new Date(); // Take timestamp
+            return await this.loaderFn!()
+        }
+        finally {
+            if(this.options.fixedInterval === false) this.lastExecTime = new Date(); // Take timestamp
+        }
     }
 
     activateRegularRePollingIfNeeded() {
@@ -113,7 +123,7 @@ class RecordedLoadCall {
             clearTimeout(this.rePollTimer); // Call this to make sure...May be polling has been activated and deactivated in the manwhile during executeRePoll and this.rePollTimer is now another one
             this.rePollTimer = undefined;
             this.activateRegularRePollingIfNeeded();
-        }, this.options.interval); // TODO: Use lastResultTime
+        },  Math.max(0, this.options.interval - (new Date().getTime() - this.lastExecTime!.getTime())) );
     }
 
     /**
@@ -121,7 +131,7 @@ class RecordedLoadCall {
      */
     async executeRePoll() {
         try {
-            const value = await this.loaderFn!();
+            const value = await this.exec();
             this.result = {state: "resolved", resolvedValue:value}
 
             const hasFallback = this.options.hasOwnProperty("fallback");
@@ -146,9 +156,6 @@ class RecordedLoadCall {
     }
 
     checkValid() {
-        if(this.result.state === "pending" && this.lastResultTime !== undefined) {
-            throw new Error("Illegal state"); // Assuming, a load call is not re used for fresh loading
-        }
         if(this.rePollTimer !== undefined && this.result.state === "pending") {
             throw new Error("Illegal state");
         }
@@ -558,7 +565,19 @@ type LoadOptions = {
     name?: string
 }
 type PollOptions = {
+    /**
+     * Interval in milliseconds
+     */
     interval: number
+
+    /**
+     * - true = interval means loaderFn-start to loaderFn-start
+     * - false = interval means loaderFn-end to loaderFn-start (the longer loaderFn takes, the more time till next re-poll)
+     * <p>
+     * Default: true
+     * </p>
+     */
+    fixedInterval?:boolean
 }
 
 /**
@@ -720,9 +739,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
 
             // *** make a loadCall / exec loaderFn ***:
 
-            let loadCall = new RecordedLoadCall(persistent, options.interval?loaderFn:undefined, options, renderRun.loadCallIndex);
+            let loadCall = new RecordedLoadCall(persistent, loaderFn, options, renderRun.loadCallIndex);
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
-            const resultPromise = Promise.resolve(loaderFn()); // Exec loaderFn
+            const resultPromise = Promise.resolve(loadCall.exec()); // Exec loaderFn
+            loadCall.loaderFn = options.interval?loadCall.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
             loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
