@@ -126,7 +126,13 @@ const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
 });
 
 const itemsFetchCounter: Record<string, number> = {};
-const itemsFetchCounter_incr = (name: string) => itemsFetchCounter[name] = (itemsFetchCounter[name] || 0)+1;
+const itemsFetchCounter_incr = (name: string) => {
+    const result = itemsFetchCounter[name] = (itemsFetchCounter[name] || 0)+1;
+    if(name === "item2" && result > 0 && result % 8 === 0) {
+        throw new Error("I'm item2 and i don't like numbers devideable by 8")
+    }
+    return result;
+}
 const MultipleLoadsInALoop = WatchedComponent((props) => {
     const state = useWatchedState({
         withFallbacks: false,
@@ -301,9 +307,11 @@ function App(props) {
             <hr/>
             <ShouldReLoadIfStateChanges/>
             <hr/>
-            <Suspense fallback={<div>Loading</div>}>
-                <MultipleLoadsInALoop/>
-            </Suspense>
+            <ExampleErrorBoundary>
+                <Suspense fallback={<div>Loading</div>}>
+                    <MultipleLoadsInALoop/>
+                </Suspense>
+            </ExampleErrorBoundary>
             <hr/>
             <Suspense fallback="Outer suspense: loading...">
                 <InnerSuspense/>
