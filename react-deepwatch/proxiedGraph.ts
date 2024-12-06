@@ -5,7 +5,6 @@ import {ObjKey} from "./watchedGraph";
 
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
-    protected abstract graphProxyHandlerConstructor: {  new(target: object, graph: any): HANDLER  }
     /**
      * Treats them like functions, meaning, they get a proxied 'this'. WatchProxies will see the access to the real properties
      */
@@ -15,6 +14,7 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     protected proxies = new WeakSet<object>();
     protected objectsToProxyHandlers = new WeakMap<object, HANDLER>();
 
+    protected abstract crateHandler(target: object, graph: any): HANDLER;
 
     getProxyFor<O extends object>(obj: O): O {
         if(this.proxies.has(obj)) { // Already the our proxied object ?
@@ -26,7 +26,7 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
             return handlerForObj.proxy as O;
         }
 
-        handlerForObj = new this.graphProxyHandlerConstructor(obj, this);
+        handlerForObj = this.crateHandler(obj, this);
         // register:
         proxyToProxyHandler.set(handlerForObj.proxy, handlerForObj);
         this.proxies.add(handlerForObj.proxy);

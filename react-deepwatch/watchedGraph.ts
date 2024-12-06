@@ -213,8 +213,7 @@ export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]
  * - record read and make several snapshots (when load is called) and compare exactly those reads
  */
 export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
-    // *** Configuration: ***
-    protected graphProxyHandlerConstructor = WatchedGraphHandler
+
 
     /**
      * Watches also writes that are not made through a proxy of this WatchedGraph by installing a setter (property accessor) on each of the desired properties
@@ -280,8 +279,9 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
         }
     }
 
-
-
+    protected crateHandler(target: object, graph: any): WatchedGraphHandler {
+        return new WatchedGraphHandler(target, graph);
+    }
 }
 
 class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
