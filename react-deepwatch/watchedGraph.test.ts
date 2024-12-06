@@ -1,5 +1,5 @@
-import {it, expect, test, beforeEach,describe } from 'vitest'
-import {ObjKey, RecordedPropertyRead, WatchedGraph} from "./watchedGraph";
+import {it, expect, test, beforeEach,describe, vitest, vi} from 'vitest'
+import {ObjKey, RecordedPropertyRead, RecordedRead, recordedReadsArraysAreEqual, WatchedGraph} from "./watchedGraph";
 import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
 
@@ -352,9 +352,128 @@ describe('WatchedGraph tests', () => {
 
     });
 
+    it("should not fire onChange when value stays the same", ()=> {
+        // TODO
+    })
+
     test("Template", () => {
         const sampleGraph = createSampleObjectGraph();
         let watchedGraph = new WatchedGraph();
         const proxy = watchedGraph.getProxyFor(sampleGraph);
     });
+});
+
+
+describe('WatchedGraph record read and watch it', () => {
+    /**
+     * Just do something the runtime can't optimize away
+     * @param value
+     */
+    function read(value: any) {
+        if( ("" + value) == "blaaxyxzzzsdf" ) {
+            throw new Error("should never get here")
+        }
+    }
+
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void, writerFn: (obj: T) => void, falseReadsFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
+        for(const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
+            test(`${name} ${mode}`, () => {
+                const testSetup = provideTestSetup();
+
+                let watchedGraph = new WatchedGraph();
+                const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                let reads: RecordedPropertyRead[] = [];
+                watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+
+                reads = [];
+                testSetup.readerFn(proxy);
+                expect(reads.length).toBeGreaterThan(0);
+                const lastRead = reads[reads.length -1];
+
+                //writerFn:
+                {
+                    const changeHandler = vitest.fn();
+                    lastRead.onChange(changeHandler);
+                    testSetup.writerFn(proxy);
+                    expect(changeHandler).toBeCalledTimes(1);
+                    lastRead.offChange(changeHandler);
+                }
+
+                //falseWriteFn:
+                if(testSetup.falseWritesFn)
+                {
+                    const changeHandler = vitest.fn();
+                    lastRead.onChange(changeHandler);
+                    testSetup.falseWritesFn(proxy);
+                    expect(changeHandler).toBeCalledTimes(0);
+                    lastRead.offChange(changeHandler);
+                }
+
+
+                //falseReadFn:
+                if(testSetup.falseReadsFn)
+                {
+                    const testSetup = provideTestSetup();
+                    let watchedGraph = new WatchedGraph();
+                    const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                    let reads: RecordedPropertyRead[] = [];
+                    watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+                    testSetup.falseReadsFn!(proxy);
+                    expect(reads.length).toBeGreaterThan(0);
+                    const lastRead = reads[reads.length -1];
+                    const changeHandler = vitest.fn();
+                    lastRead.onChange(changeHandler);
+                    testSetup.writerFn(proxy);
+                    expect(changeHandler).toBeCalledTimes(0);
+                    lastRead.offChange(changeHandler);
+                }
+            });
+        }
+
+        test(`${name}: Recorded reads are equals when run twice`, () => {
+            // readerFns reads are equal?
+            const testSetup = provideTestSetup();
+            let watchedGraph = new WatchedGraph();
+            const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+            let reads: RecordedRead[] = [];
+            watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+
+            // 1st time:
+            testSetup.readerFn(proxy);
+            expect(reads.length).toBeGreaterThan(0);
+            const reads1 = reads;
+
+            // 2nd time:
+            reads = [];
+            testSetup.readerFn(proxy);
+            const reads2 = reads;
+
+            expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
+        })
+    }
+
+
+    testRecordReadAndWatch("Set object property", () => {
+        const obj: {someProp?: string} = {};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(obj.someProp)},
+            writerFn: (obj) => {obj.someProp = "123"},
+            falseReadsFn: (obj) => {read((obj as any).someOtherProp)}, // TODO
+            falseWritesFn: (obj) => {obj.someProp="123" /* again */}
+        }
+    });
+
+    /* Template:
+    testRecordReadAndWatch("set object property", () => {
+        const obj: {} = {};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {...},
+            writerFn: (obj) => () => {...},
+            falseReadsFn: (obj) => {},
+            falseWritesFn: (obj) => {}
+        }
+    });
+    */
 });
