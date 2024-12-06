@@ -349,7 +349,7 @@ class Frame {
 }
 
 /**
- * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the WatchedComponent.
+ * Lifecycle: Starts when rendering and ends when unmounting or re-rendering the watchedComponent.
  * - References to this can still exist when WatchedComponentPersistent is in a resumeable error state (is this a good idea? )
  */
 class RenderRun {
@@ -407,7 +407,7 @@ class RenderRun {
 }
 let currentRenderRun: RenderRun| undefined;
 
-export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
+export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
     const outerResult = (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
@@ -527,12 +527,12 @@ type WatchedOptions = {
 }
 
 function watched<T extends object>(obj: T, options?: WatchedOptions): T {
-    currentRenderRun || throwError("watched is not used from inside a WatchedComponent");
+    currentRenderRun || throwError("watched is not used from inside a watchedComponent");
     return currentRenderRun!.frame.watchedGraph.getProxyFor(obj);
 }
 
 export function useWatchedState(initial: object, options?: WatchedOptions) {
-    currentRenderRun || throwError("useWatchedState is not used from inside a WatchedComponent");
+    currentRenderRun || throwError("useWatchedState is not used from inside a watchedComponent");
 
     const [state]  = useState(initial);
     return watched(state);
@@ -641,7 +641,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
 
     // Validity checks:
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
-    if(currentRenderRun === undefined) throw new Error("load is not used from inside a WatchedComponent")
+    if(currentRenderRun === undefined) throw new Error("load is not used from inside a watchedComponent")
 
     const hasFallback = options.hasOwnProperty("fallback");
     const renderRun = currentRenderRun;
@@ -825,7 +825,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
 export function isLoading(nameFilter?: string): boolean {
     const renderRun = currentRenderRun;
     // Validity check:
-    if(renderRun === undefined) throw new Error("isLoading is not used from inside a WatchedComponent")
+    if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
     return probe(() => renderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
 }
@@ -851,7 +851,7 @@ export function isLoading(nameFilter?: string): boolean {
 export function loadFailed(nameFilter?: string): unknown {
     const renderRun = currentRenderRun;
     // Validity check:
-    if(renderRun === undefined) throw new Error("isLoading is not used from inside a WatchedComponent")
+    if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
     return probe(() => {
         return (renderRun.frame.persistent.loadCalls.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
@@ -923,7 +923,7 @@ export function poll(loaderFn: () => Promise<unknown>, options: LoadOptions & Po
 function probe<T>(probeFn: () => T, defaultResult: T) {
     const renderRun = currentRenderRun;
     // Validity check:
-    if(renderRun === undefined) throw new Error("Not used from inside a WatchedComponent")
+    if(renderRun === undefined) throw new Error("Not used from inside a watchedComponent")
 
     if(renderRun.isPassive) {
         return probeFn();

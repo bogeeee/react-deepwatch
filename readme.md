@@ -18,9 +18,9 @@ npm install --save react-deepwatch
 # Usage
 ## no more setState
 ````jsx
-import {WatchedComponent, useWatched, useWatchedState} from "react-deepwatch"
+import {watchedComponent, useWatched, useWatchedState} from "react-deepwatch"
           
-const MyComponent = WatchedComponent(props => {
+const MyComponent = watchedComponent(props => {
     const state = useWatchedState( {myDeep: {counter: 0, b: 2}}, {/* WatchedOptions (optional) */} );
 
     return <div>
@@ -36,9 +36,9 @@ const MyComponent = WatchedComponent(props => {
 Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
 
 ````jsx
-import {WatchedComponent, load, poll, isLoading, loadFailed} from "react-deepwatch"
+import {watchedComponent, load, poll, isLoading, loadFailed} from "react-deepwatch"
 
-const MyComponent = WatchedComponent(props => {
+const MyComponent = watchedComponent(props => {
 
     return <div>
         Here's something fetched from the Server: {  load( () => myFetchFromServer(props.myProperty), {/* LoadOptions (optional) */} )  }
@@ -70,7 +70,7 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - See the `LoadOptions#fallback` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
 
 ### Caveats
-- The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponent#fallback`.
+- The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `watchedComponent#fallback`.
 - `<Suspense>` and `<ErrorBoundary>` inside your component function do not handle/catch loads in that **same** function. _Means: You must place them outside to handle/catch them._
 - If your app is a mixed scenario with non-watchedComponents and relies on the old way of fully re-rendering the whole tree to pass deep model data (=more than using shallow, primitive props) to the leaves, mind disabling the WatchedComponentOptions#memo flag.
 - SSR is not supported.

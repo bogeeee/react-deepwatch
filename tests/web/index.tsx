@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {WatchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
+import {watchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -40,7 +40,7 @@ function delayed(fn: () => unknown, delay = 1000, returnError= false) {
 }
 
 
-const BasicCounter = WatchedComponent((props) => {
+const BasicCounter = watchedComponent((props) => {
     const state = useWatchedState({myDeep: {counter: 0, b: 2}});
 
     return <div>
@@ -52,7 +52,7 @@ const BasicCounter = WatchedComponent((props) => {
     </div>
 });
 
-const ShouldNotRerender = WatchedComponent((props) => {
+const ShouldNotRerender = watchedComponent((props) => {
     const state = useWatchedState({myDeep: {counter: 0, b: 2}, someObj:{isSome: true}});
 
     return <div>
@@ -67,8 +67,8 @@ const ShouldNotRerender = WatchedComponent((props) => {
     </div>
 });
 
-const WatchProps = WatchedComponent((props) => {
-    const WatchProps_Child = WatchedComponent((props: {globalObj: any, someOtherProp: boolean}) => {
+const WatchProps = watchedComponent((props) => {
+    const WatchProps_Child = watchedComponent((props: {globalObj: any, someOtherProp: boolean}) => {
         return <div>
             {renderCounter("should be increased on button click")}
             <div>Should increase on click: {props.globalObj.counter}</div>
@@ -93,13 +93,13 @@ let ShouldReLoadIfStateChanges_fetchCounter3= 0;
 /**
  * Also an inner component, which does not rerender automatically if any state change so we can test if it really detects them from the reads inside the loaderFn
  */
-const ShouldReLoadIfStateChanges3_Inner = memo(WatchedComponent((props) => {
+const ShouldReLoadIfStateChanges3_Inner = memo(watchedComponent((props) => {
     return <div>Retrieve counter3 dependant: {load(delayed(() => {
         return `counter: ${props.model.counter3}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter3} times - should increase on button 3 only`
     }, props.model.withDelay ? 1200 : 0), {fallback: "Loading"})}  - (inner component)</div>
 }));
 
-const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
+const ShouldReLoadIfStateChanges = watchedComponent((props) => {
     const state = useWatchedState({
         counter1: 0,
         counter2:0,
@@ -133,7 +133,7 @@ const itemsFetchCounter_incr = (name: string) => {
     }
     return result;
 }
-const MultipleLoadsInALoop = WatchedComponent((props) => {
+const MultipleLoadsInALoop = watchedComponent((props) => {
     const state = useWatchedState({
         withFallbacks: false,
         withIsLoadingIndicator: false,
@@ -183,12 +183,12 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 
 
 let innerSuspense_inner_fetchCounter = 0;
-const InnerSuspense_Inner = WatchedComponent( (props: {model: {counter: number}}) => {
+const InnerSuspense_Inner = watchedComponent( (props: {model: {counter: number}}) => {
     return <div>Result of InnerSuspense_Inner fetch: {load(delayed(() => `counter: ${props.model.counter}, fetched ${++innerSuspense_inner_fetchCounter} times`, 1000), {})}</div>
 });
 
 let innerSuspense_fetchCounter = 0;
-const InnerSuspense = WatchedComponent(props => {
+const InnerSuspense = watchedComponent(props => {
     const state = useWatchedState({counter:0});
     return <div>
         <h3>InnserSuspense</h3>
@@ -202,7 +202,7 @@ const InnerSuspense = WatchedComponent(props => {
     </div>
 });
 
-const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(props => {
+const ShouldReactToOtherPropChangesWhileLoading_Inner = new watchedComponent(props => {
     const model = props.model;
 
     //if(loadFailed()) return "Load failed: " + loadFailed().message
@@ -214,7 +214,7 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner = new WatchedComponent(pro
     </div>
 })
 
-const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback = new WatchedComponent(props => {
+const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback = new watchedComponent(props => {
     const model = props.model;
 
     //if(loadFailed())  return "Load failed: " + loadFailed().message;
@@ -226,7 +226,7 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback =
     </div>
 }, {fallback: <div>Loading with WatchedComponentOptions#fallback...</div>})
 
-const ShouldReactToOtherPropChangesWhileLoading = new WatchedComponent(props => {
+const ShouldReactToOtherPropChangesWhileLoading = new watchedComponent(props => {
     const state = useWatchedState({counter:0, withFallbacks: false, canceled: false, shouldReturnAnError: false});
 
     return <div>
@@ -248,13 +248,13 @@ const ShouldReactToOtherPropChangesWhileLoading = new WatchedComponent(props => 
 
 
 let ShouldReLoadIfPropsPropertyChanges_fetchCounter = 0;
-const ShouldReLoadIfPropsPropertyChanges_Child = WatchedComponent((props: {myProp:number, myProp2: number}) => {
+const ShouldReLoadIfPropsPropertyChanges_Child = watchedComponent((props: {myProp:number, myProp2: number}) => {
     return <div>
         Child: myProp: { load(async () => {return `${props.myProp}, fetchCounter: ${ShouldReLoadIfPropsPropertyChanges_fetchCounter++}`}) }
     </div>
 });
 
-const ShouldReLoadIfPropsChange = WatchedComponent((props) => {
+const ShouldReLoadIfPropsChange = watchedComponent((props) => {
     const state = useWatchedState({counter: 0, counter2:0});
 
     return <div>
@@ -267,11 +267,11 @@ const ShouldReLoadIfPropsChange = WatchedComponent((props) => {
     </div>
 });
 
-const CheckBox = WatchedComponent((props: {model: {value: boolean}}) => {
+const CheckBox = watchedComponent((props: {model: {value: boolean}}) => {
     return <input type="checkbox" checked={props.model.value} onChange={(event) => {props.model.value = event.target.checked}} />
 });
 
-const LoadErrorsImmediately_inner = WatchedComponent((props: {model: {value: boolean}}) => {
+const LoadErrorsImmediately_inner = watchedComponent((props: {model: {value: boolean}}) => {
     debug_tagComponent("LoadErrorsImmediately_inner");
     return load(async () => {
         if(props.model.value) throw new Error("This error should be displayed immediately");
@@ -280,7 +280,7 @@ const LoadErrorsImmediately_inner = WatchedComponent((props: {model: {value: boo
 
 });
 
-const LoadErrorsImmediately = WatchedComponent(props => {
+const LoadErrorsImmediately = watchedComponent(props => {
     const state = useWatchedState({value: true});
 
     return <div>
