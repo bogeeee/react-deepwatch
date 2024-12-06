@@ -1,6 +1,6 @@
 import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
-import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext} from "react";
+import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {ProxiedGraph} from "./proxiedGraph";
 
@@ -18,8 +18,18 @@ type WatchedComponentOptions = {
     fallback?: ReactNode,
 
     /**
-     * Everything that's **taken** from props, {@link useWatchedState} or {@link watched} will be returned, wrapped in a proxy that watches for modifications.
-     * So far, so good, this can handle all stuff that's happening inside your component, but the outside world does not have these proxies. For example, the parent component, that passed in an object (i.e. the model) into this component via props.
+     * Wraps this component in a {@link https://react.dev/reference/react/memo memo} to prevent unnecessary re-renders.
+     * This is enabled by default, since watchedComponents smartly tracks deep changes of used props and knows when to rerender.
+     * Disable this only in a mixed scenario with non-watchedComponents, where they rely on the old way of fully re-rendering the whole tree to pass deep model data (=more than using shallow, primitive props) to the leaves. So this component does not block these re-renders in the middle.
+     * <p>
+     *   Default: true
+     * </p>
+     */
+    memo?: boolean
+
+    /**
+     * Normally, everything that's **taken** from props, {@link useWatchedState} or {@link watched} or load(...)'s result will be returned, wrapped in a proxy that watches for modifications.
+     * So far, so good, this can handle all stuff that's happening inside your component, but the outside world does not have these proxies. For example, when a parent component is not a watchedComponent, and passed in an object (i.e. the model) into this component via props.
      * Therefore this component can also **patch** these objects to make them watchable. I.e. it defines setters for properties or replaces the push method for an array instance.
      *
      *
@@ -398,7 +408,7 @@ class RenderRun {
 let currentRenderRun: RenderRun| undefined;
 
 export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
-    return (props: PROPS) => {
+    const outerResult = (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent());
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
@@ -493,6 +503,12 @@ export function WatchedComponent<PROPS extends object>(componentFn:(props: PROPS
             currentRenderRun = undefined;
         }
     }
+
+    if (options.memo === false) {
+        return outerResult;
+    }
+
+    return memo(outerResult);
 }
 
 type WatchedOptions = {

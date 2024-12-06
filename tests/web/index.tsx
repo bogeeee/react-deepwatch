@@ -179,7 +179,7 @@ const MultipleLoadsInALoop = WatchedComponent((props) => {
 
         <br/><button onClick={ () => state.globalCounter++} >Increase globalCounter</button><i>Should load in parallel if the above features are flipped</i>
     </div>
-});
+}, {memo: false});
 
 
 let innerSuspense_inner_fetchCounter = 0;
