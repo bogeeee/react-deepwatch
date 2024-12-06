@@ -376,7 +376,8 @@ class RenderRun {
         this.frame.persistent.onceOnEffectCleanupListeners.forEach(fn => fn());
         this.frame.persistent.onceOnEffectCleanupListeners = [];
 
-        if(this.frame.result instanceof Error && this.frame.dismissErrorBoundary !== undefined) { // Error is displayed ?
+        let currentFrame = this.frame.persistent.currentFrame;
+        if(currentFrame.result instanceof Error && currentFrame.dismissErrorBoundary !== undefined) { // Error is displayed ?
             // Still listen for property changes to be able to recover from errors
             this.frame.persistent.onceOnReRenderListeners.push(() => {this.frame.stopListeningForChanges()}); //Instead clean up listeners next time
         }
