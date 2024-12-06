@@ -297,6 +297,10 @@ const ExampleErrorBoundary = (props) => {
 }
 
 function App(props) {
+    const [powerOff, switchPoperOff] = useState(false);
+    if(powerOff) {
+        return <div>Shut down. Listeners should be 0. (Note: Components that errored and are currently caught by in an ErrorBoundary, like LoadErrorsImmediately, leak their listeners. This is by reacts design/cannot prevent this) </div>
+    }
     return <div>
         <Suspense fallback={<div>Loading</div>}>
             <BasicCounter/>
@@ -328,6 +332,8 @@ function App(props) {
             </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>
+            <hr/>
+            <button onClick={() => switchPoperOff(true)}>Shut down all components!</button>
         </Suspense>
     </div>
 }
