@@ -7,6 +7,28 @@ export type ObjKey = string | symbol;
 type AfterReadListener = (read: RecordedRead) => void;
 type AfterWriteListener = (value: unknown) => void;
 
+export function watchable<T extends object>(obj: T): T {
+    throw new Error("TODO");
+}
+
+const exclusiveWatchables = new WeakSet<object>();
+
+/**
+ * Like {@see watchable}: Makes obj watchable and returns the watchable proxy.
+ * By the "x", you confirm that you will only ever use the proxy and **never use the original object**, to make writes on it.
+ *
+ * Therefore, adding properties to obj can always safely be watched.
+ * @param obj
+ */
+export function xWatchable<T extends object>(obj: T): T {
+    exclusiveWatchables.add(obj);
+    return watchable(obj);
+}
+
+export function isXWatchable(obj: object) {
+    return exclusiveWatchables.has(obj);
+}
+
 
 export abstract class RecordedRead {
     abstract equals(other: RecordedRead): boolean;
