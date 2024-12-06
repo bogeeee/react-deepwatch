@@ -1,24 +1,28 @@
+# Developing
 ### Prepare
 
 ```bash
 git clone https://github.com/bogeeee/react-deepwatch.git
-cd react-deepwatch/react-deepwatch
+cd react-deepwatch
 npm install --ignore-scripts
 ```
 
 
 ### Run the tests
+from inside the project dir:
 ```bash
 cd react-deepwatch
 npm run test
 ```
 
 ### Run the web based (manual) tests
+from inside the project dir:
 ```bash
-cd devPlayground
+cd react-deepwatch
 npm intall
 npm run tests:web:prepare
 npm run tests:web
+```
 
 
 # Understanding the code

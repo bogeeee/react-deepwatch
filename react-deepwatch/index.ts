@@ -836,7 +836,7 @@ export function loadFailed(nameFilter?: string): unknown {
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
- *     TODO: Example
+ * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
  * </p>
  * <p>
  * Polling is still continued in recoverable error cases, when
@@ -854,11 +854,17 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: Omit<LoadO
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
+ * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
+ * </p>
+ * <p>
  * Polling is still continued in recoverable error cases, when
  * </p>
  *  - loaderFn fails but your watchedComponent catches it and returns fine.
  *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
  *
+ * <p>
+ *     Note, that after the initial load, re-polling is done <strong>very silently</strong>. Meaning, there's no suspense / fallback / isLoading indicator involved.
+ * </p>
  * @param loaderFn
  * @param options
  */
@@ -866,11 +872,17 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
+ * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
+ * </p>
+ * <p>
  * Polling is still continued in recoverable error cases, when
  * </p>
  *  - loaderFn fails but your watchedComponent catches it and returns fine.
  *  - Your watchedComponent returns with an error(because of this loaderFn or some other reason) and it is wrapped in a react-error-boundary.
  *
+ * <p>
+ *     Note, that after the initial load, re-polling is done <strong>very silently</strong>. Meaning, there's no suspense / fallback / isLoading indicator involved.
+ * </p>
  * @param loaderFn
  * @param options
  */
