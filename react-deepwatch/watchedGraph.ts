@@ -120,7 +120,92 @@ export class RecordedPropertyRead extends RecordedRead{
     }
 }
 
+export class RecordedArrayLengthRead extends RecordedPropertyRead {
 
+
+    onChange(listener: (newValue: unknown) => void) {
+        if(!this.proxyHandler) {
+            throw new Error("TODO");
+        }
+        else {
+            this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
+            debug_numberOfPropertyChangeListeners++;
+        }
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+        if(!this.proxyHandler) {
+            throw new Error("TODO");
+        }
+        else {
+            this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
+            debug_numberOfPropertyChangeListeners--;
+        }
+    }
+}
+
+export class RecordedSet_has extends RecordedRead {
+    proxyHandler?: WatchedGraphHandler
+    obj: Set<any>;
+    key: any;
+    value: boolean;
+
+    /**
+     * Possibly we could live without it and use events only in load.canReusePreviousResult
+     */
+    get isChanged(): boolean {
+        throw new Error("TODO");
+    }
+
+    constructor() {
+        super();
+        throw new Error("TODO");
+    }
+
+    onChange(listener: (newValue: unknown) => void) {
+        throw new Error("TODO");
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+        throw new Error("TODO");
+    }
+
+    equals(other: RecordedRead): boolean {
+        throw new Error("TODO");
+    }
+}
+
+export class RecordedSet_values extends RecordedRead {
+    proxyHandler?: WatchedGraphHandler
+    obj: Set<any>;
+    value: any[];
+
+    get isChanged(): boolean {
+        throw new Error("TODO");
+    }
+
+    constructor() {
+        super();
+        throw new Error("TODO");
+    }
+
+    onChange(listener: (newValue: unknown) => void) {
+        throw new Error("TODO");
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+        throw new Error("TODO");
+    }
+
+    equals(other: RecordedRead): boolean {
+        throw new Error("TODO");
+    }
+}
+//TODO ...
+
+export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]) {
+    return arraysAreEqualsByPredicateFn(a, b, (a, b) => a.equals(b) );
+}
 
 /**
  * Use cases:
