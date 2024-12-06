@@ -128,8 +128,8 @@ const ShouldReLoadIfStateChanges = WatchedComponent((props) => {
 const itemsFetchCounter: Record<string, number> = {};
 const itemsFetchCounter_incr = (name: string) => {
     const result = itemsFetchCounter[name] = (itemsFetchCounter[name] || 0)+1;
-    if(name === "item2" && result > 0 && result % 8 === 0) {
-        throw new Error("I'm item2 and i don't like numbers devideable by 8")
+    if(name === "item2" && result > 0 && result % 20 === 0) {
+        throw new Error("I'm item2 and i don't like numbers devideable by 20")
     }
     return result;
 }
