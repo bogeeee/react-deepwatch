@@ -19,6 +19,38 @@ export abstract class RecordedRead {
 
 }
 
+/**
+ * Access a single value (=variable or return value from a function)
+ * This read is can only be constructed manually (not through a WatchedGraph / WatchedGraphHandler
+ */
+export class RecordedValueRead extends RecordedRead{
+    value: unknown;
+
+    constructor(value: unknown) {
+        super();
+        this.value = value;
+    }
+
+    get isChanged(): boolean {
+        throw new Error("Cannot check if simple value (not on object) has changed.");
+    }
+
+    onChange(listener: (newValue: unknown) => void) {
+        throw new Error("Cannot listen for changes on simple value (not on object)");
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedValueRead)) {
+            return false;
+        }
+
+        return this.value === other.value;
+    }
+}
+
 export class RecordedPropertyRead extends RecordedRead{
     proxyHandler?: WatchedGraphHandler
     /**
