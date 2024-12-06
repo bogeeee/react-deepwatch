@@ -70,16 +70,16 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - See the `LoadOptions#fallback` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
 
 ### Caveats
-- The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `watchedComponent#fallback`.
+- The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponentOptions#fallback`.
 - `<Suspense>` and `<ErrorBoundary>` inside your component function do not handle/catch loads in that **same** function. _Means: You must place them outside to handle/catch them._
 - If your app is a mixed scenario with non-watchedComponents and relies on the old way of fully re-rendering the whole tree to pass deep model data (=more than using shallow, primitive props) to the leaves, mind disabling the WatchedComponentOptions#memo flag.
 - SSR is not supported.
 - [startTransition](https://react.dev/reference/react/startTransition) is not supported (has no effect).
 
-#Playground
+# Playground
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=react-deepwatch%20example&file=index.ts). _Not working with StackBlitz on Firefox currently. Ignore the ever-spinning "Installing dependencies"._
 
-#Further notes
+# Further notes
 ### useWatched
 You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props into your component function._
 ### poll
