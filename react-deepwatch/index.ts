@@ -303,17 +303,20 @@ class Frame {
     }
 
     cleanUpPropChangeListenerFns: (()=>void)[] = [];
+
     /**
      * @see startListeningForChanges
+     * @param deactivateRegularRePoll keep this true normally.
      */
-    stopListeningForChanges() {
+    stopListeningForChanges(deactivateRegularRePoll=true) {
         if(!this.isListeningForChanges) {
             return;
         }
 
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
-
-        this.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // Stop scheduled re-polls
+        if(deactivateRegularRePoll) {
+            this.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // Stop scheduled re-polls
+        }
 
         this.isListeningForChanges = false;
     }
@@ -376,10 +379,16 @@ class RenderRun {
         this.frame.persistent.onceOnEffectCleanupListeners.forEach(fn => fn());
         this.frame.persistent.onceOnEffectCleanupListeners = [];
 
-        let currentFrame = this.frame.persistent.currentFrame;
+        let currentFrame = this.frame.persistent.currentFrame!;
         if(currentFrame.result instanceof Error && currentFrame.dismissErrorBoundary !== undefined) { // Error is displayed ?
-            // Still listen for property changes to be able to recover from errors
-            this.frame.persistent.onceOnReRenderListeners.push(() => {this.frame.stopListeningForChanges()}); //Instead clean up listeners next time
+            // Still listen for property changes to be able to recover from errors and clean up later:
+            if(this.frame !== currentFrame) { // this.frame is old ?
+                this.frame.stopListeningForChanges(false); // This frame's listeners can be cleaned now but still keep the polling alive (there's a conflict with double responsibility here / hacky solution)
+            }
+            this.frame.persistent.onceOnReRenderListeners.push(() => {
+                this.frame.stopListeningForChanges();
+                this.frame.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // hacky solution2: The lines above have propably skipped this, so do it now
+            }); //Instead clean up listeners next time
         }
         else {
             this.frame.stopListeningForChanges(); // Clean up now
