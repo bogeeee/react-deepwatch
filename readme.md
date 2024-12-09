@@ -6,7 +6,7 @@
 
 **Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write less code 😊.
 - **Performance friendly**  
-  React Deepwatch uses recursive [proxies](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
+  React Deepwatch uses [proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) facades to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
   If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#usewatched) ;)
 
@@ -41,7 +41,7 @@ import {watchedComponent, load, poll, isLoading, loadFailed} from "react-deepwat
 const MyComponent = watchedComponent(props => {
 
     return <div>
-        Here's something fetched from the Server: {  load( () => myFetchFromServer(props.myProperty), {/* LoadOptions (optional) */} )  }
+        Here's something fetched from the Server: {  load( async () => await myFetchFromServer(props.myProperty), {/* LoadOptions (optional) */} )  }
     </div>
 });
 
@@ -49,7 +49,8 @@ const MyComponent = watchedComponent(props => {
 ````
 **`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.  
-_👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._  
+👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._
+For this mechanic to work, **make sure, all sources are watched**: `props` and `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
 
 ### Show a 🌀loading spinner
 To show a 🌀loading spinner / placeholder during load, either...
@@ -84,3 +85,20 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 You can also use `useWatched` similarly  to `useWatchedState` to watch any global object. _But in react paradigm, this is rather rare, because values are usually passed as props into your component function._
 ### poll
 Besides `load`, there's also the `poll` function, which works similar, but in regular intervals. _See jsDoc_
+
+### Simplify the server side as well
+If you like, how this library simplifies things for you and want to write the backend (http) endpoints behind your load(...) statements simply as typescript methods, have a look at my flagship project [Restfuncs](https://github.com/bogeeee/restfuncs).
+Example: 
+````typescript
+// In your watchedComponent function:
+return <div>The greeting's result from server is: {  load( async () => await myRemoteSession.greet(state.name) )  }</div>
+
+// On the server:
+...
+@remote greet(name: string) {
+    return `Hello ${name}` 
+}
+...
+````
+_The example leaves away all the the setup-once boilerplate code.  
+Also in your tsx, you can enjoy type awareness / type safety and IDE's code completion around `myRemoteSession.greet` and all its parameters and returned types, which is a feature that only rpc libraries can offer (Restfuncs is such one)😎_

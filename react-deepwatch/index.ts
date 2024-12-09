@@ -609,7 +609,7 @@ type PollOptions = {
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
  * <p>
- * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * {@link https://github.com/bogeeee/react-deepwatch#and-less-loading-code Usage}.
  * </p>
  * @param loaderFn
  * @param options
@@ -619,7 +619,7 @@ export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<Load
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
  * <p>
- * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * {@link https://github.com/bogeeee/react-deepwatch#and-less-loading-code Usage}.
  * </p>
  * @param loaderFn
  * @param options
@@ -629,7 +629,7 @@ export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
  * <p>
- * {@link https://github.com/bogeeee/react-deepwatch?tab=readme-ov-file#and-less-loading-code Usage}.
+ * {@link https://github.com/bogeeee/react-deepwatch#and-less-loading-code Usage}.
  * </p>
  * @param loaderFn
  * @param options
@@ -861,7 +861,7 @@ export function loadFailed(nameFilter?: string): unknown {
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
- * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
+ * Example: <code>return <div>The current outside temperature is {  poll( async () => await fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
  * </p>
  * <p>
  * Polling is still continued in recoverable error cases, when
@@ -879,7 +879,7 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: Omit<LoadO
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
- * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
+ * Example: <code>return <div>The current outside temperature is {  async poll( await () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
  * </p>
  * <p>
  * Polling is still continued in recoverable error cases, when
@@ -897,7 +897,7 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
- * Example: <code>return <div>The current outside temperature is {  poll( () => fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
+ * Example: <code>return <div>The current outside temperature is {  poll( async () => await fetchTemperatureFromServer(), {interval: 1000} )  }° </div></code> *
  * </p>
  * <p>
  * Polling is still continued in recoverable error cases, when
