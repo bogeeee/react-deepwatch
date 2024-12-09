@@ -36,6 +36,14 @@ export class MapSet<K, V> {
     }
 }
 
+/**
+ * A WeakMap<K, Set<V>>. But automatically add a new Set if needed
+ */
+export class WeakMapSet<K, V> extends MapSet<K, V> {
+    //@ts-ignore
+    map = new WeakMap<K, Set<V>>();
+}
+
 export function arraysAreEqualsByPredicateFn<A, B>(a: A[], b: B[], equalsFn: (a: A,b: B) => boolean) {
     if(a.length !== b.length) {
         return false;

@@ -356,6 +356,14 @@ describe('WatchedGraph tests', () => {
         // TODO
     })
 
+    test("isArray should work on a proxy", () => {
+        const origObj: any[] = [];
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(origObj);
+        expect(Array.isArray(proxy)).toBeTruthy();
+        expect(_.isArray(proxy)).toBeTruthy();
+    })
+
     test("Template", () => {
         const sampleGraph = createSampleObjectGraph();
         let watchedGraph = new WatchedGraph();
@@ -464,8 +472,19 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    testRecordReadAndWatch<string[]>("Read values of an array", () => {
+        const obj: {} = {};
+        return {
+            origObj: ["a", "b", "c"],
+            readerFn: (obj) => {read(obj.values())},
+            writerFn: (obj) => () => {obj.push("d")},
+            falseReadsFn: (obj) => {},
+            falseWritesFn: (obj) => {}
+        }
+    });
+
     /* Template:
-    testRecordReadAndWatch("set object property", () => {
+    testRecordReadAndWatch("xxx", () => {
         const obj: {} = {};
         return {
             origObj: obj,

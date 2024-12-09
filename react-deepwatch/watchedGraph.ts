@@ -1,33 +1,13 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
 import {arraysAreEqualsByPredicateFn, MapSet} from "./Util";
 import _ from "underscore"
+import {getWatcherClassFor} from "./writeWatch";
 
 export type ObjKey = string | symbol;
 
-type AfterReadListener = (read: RecordedRead) => void;
-type AfterWriteListener = (value: unknown) => void;
+export type AfterReadListener = (read: RecordedRead) => void;
+export type AfterWriteListener = (value: unknown) => void; // TODO: it is strange, that here's only one param: value
 
-export function watchable<T extends object>(obj: T): T {
-    throw new Error("TODO");
-}
-
-const exclusiveWatchables = new WeakSet<object>();
-
-/**
- * Like {@see watchable}: Makes obj watchable and returns the watchable proxy.
- * By the "x", you confirm that you will only ever use the proxy and **never use the original object**, to make writes on it.
- *
- * Therefore, adding properties to obj can always safely be watched.
- * @param obj
- */
-export function xWatchable<T extends object>(obj: T): T {
-    exclusiveWatchables.add(obj);
-    return watchable(obj);
-}
-
-export function isXWatchable(obj: object) {
-    return exclusiveWatchables.has(obj);
-}
 
 
 export abstract class RecordedRead {
@@ -38,7 +18,6 @@ export abstract class RecordedRead {
     abstract onChange(listener: (newValue: unknown) => void): void;
 
     abstract offChange(listener: (newValue: unknown) => void): void;
-
 }
 
 /**
@@ -73,17 +52,23 @@ export class RecordedValueRead extends RecordedRead{
     }
 }
 
-export class RecordedPropertyRead extends RecordedRead{
+export abstract class RecordedReadOnProxiedObject extends RecordedRead {
     proxyHandler?: WatchedGraphHandler
     /**
      * A bit redundant with proxyhandler. But for performance reasons, we leave it
      */
     obj!: object;
+}
+
+export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
     key!: ObjKey;
     value!: unknown;
 
-    constructor() {
+
+    constructor(key: ObjKey, value: unknown) {
         super();
+        this.key = key;
+        this.value = value;
     }
 
     get isChanged() {
@@ -120,29 +105,7 @@ export class RecordedPropertyRead extends RecordedRead{
     }
 }
 
-export class RecordedArrayLengthRead extends RecordedPropertyRead {
 
-
-    onChange(listener: (newValue: unknown) => void) {
-        if(!this.proxyHandler) {
-            throw new Error("TODO");
-        }
-        else {
-            this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
-            debug_numberOfPropertyChangeListeners++;
-        }
-    }
-
-    offChange(listener: (newValue: unknown) => void) {
-        if(!this.proxyHandler) {
-            throw new Error("TODO");
-        }
-        else {
-            this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
-            debug_numberOfPropertyChangeListeners--;
-        }
-    }
-}
 
 export class RecordedSet_has extends RecordedRead {
     proxyHandler?: WatchedGraphHandler
@@ -214,7 +177,6 @@ export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]
  */
 export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
 
-
     /**
      * Watches also writes that are not made through a proxy of this WatchedGraph by installing a setter (property accessor) on each of the desired properties
      * Works only for **individual** properties which you are explicitly listening on, and not on the whole Graph.
@@ -280,30 +242,49 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
     }
 
     protected crateHandler(target: object, graph: any): WatchedGraphHandler {
+        if(Array.isArray(target)) {
+            return new WatchedGraphHandler_Array(target, graph);
+        }
         return new WatchedGraphHandler(target, graph);
     }
 }
 
-class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
+export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     afterWriteOnPropertyListeners = new MapSet<ObjKey, AfterWriteListener>();
 
     constructor(target: object, graph: WatchedGraph) {
         super(target, graph);
     }
 
-    // TODO: implement afterRead and afterWrite listeners
-    rawRead(key: ObjKey) {
-        const result = super.rawRead(key);
-
-        // Create the RecordedPropertyRead:
-        let read = new RecordedPropertyRead();
+    fireAfterRead(read: RecordedReadOnProxiedObject) {
         read.proxyHandler = this;
         read.obj = this.target;
-        read.key = key;
-        read.value = result;
 
         this.graph._afterReadListeners.forEach(l => l(read)); // Inform listeners
+    }
 
+    get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
+        if(p === "_getWatchedGraphHandler") { // TODO: use symbol for that (performance)
+            return this;
+        }
+
+        // Check for and use special supervisor class:
+        let watcherClass = getWatcherClassFor(this.target);
+        if(watcherClass && Object.getOwnPropertyDescriptor(watcherClass, p) !== undefined) { // There's a special supervisor class (i.e. WatchedArray) for target and it has that property (mostly a function) ?
+            //@ts-ignore
+            let value = watcherClass.prototype[p]; // use that special class
+            if(value != null && typeof value === "object") {
+                return this.graph.getProxyFor(value);
+            }
+            return value;
+        }
+
+        return super.get(fake_target, p, dontUse_receiver);
+    }
+
+    rawRead(key: ObjKey) {
+        const result = super.rawRead(key);
+        this.fireAfterRead(new RecordedPropertyRead(key, result)); // Inform listeners
         return result;
     }
 
@@ -313,6 +294,18 @@ class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 }
 
+export interface ForWatchedGraphHandler {
+    /**
+     * Will return the handler when called through the handler
+     */
+    _getWatchedGraphHandler(): WatchedGraphHandler | undefined;
+}
+
+class WatchedGraphHandler_Array extends WatchedGraphHandler {
+    afterPushListeners = new MapSet<ObjKey, AfterWriteListener>();
+
+
+}
 /**
  * Only counts on vs off calls for a quick alignment check
  */
