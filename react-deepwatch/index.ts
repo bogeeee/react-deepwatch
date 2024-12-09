@@ -28,14 +28,22 @@ type WatchedComponentOptions = {
     memo?: boolean
 
     /**
+     * TODO
      * Normally, everything that's **taken** from props, {@link useWatchedState} or {@link watched} or load(...)'s result will be returned, wrapped in a proxy that watches for modifications.
      * So far, so good, this can handle all stuff that's happening inside your component, but the outside world does not have these proxies. For example, when a parent component is not a watchedComponent, and passed in an object (i.e. the model) into this component via props.
-     * Therefore this component can also **patch** these objects to make them watchable. I.e. it defines setters for properties or replaces the push method for an array instance.
+     * Therefore this component can also **patch** these objects to make them watchable.
      *
      *
      * <p>Default: true</p>
      */
-    watchExternalModifications?: boolean
+    watchOutside?: boolean
+
+    /**
+     * TODO
+     * Enable this i.e., if you have logic like <code>if(row === state.selectedRow)</code>
+     * <p>Default: false</p>
+     */
+    checkInstanceEqualityForLoads?: boolean
 }
 
 class RecordedLoadCall {
