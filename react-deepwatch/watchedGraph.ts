@@ -1,13 +1,8 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
 import {arraysAreEqualsByPredicateFn, MapSet} from "./Util";
-import _ from "underscore"
-import {getWatcherClassFor} from "./writeWatch";
-
-export type ObjKey = string | symbol;
-
-export type AfterReadListener = (read: RecordedRead) => void;
-export type AfterWriteListener = (value: unknown) => void; // TODO: it is strange, that here's only one param: value
-
+import {enhanceWithWriteTracker, getWriteTrackerClassFor} from "./globalWriteTracking";
+import {getWriteListenersForArray, WriteTrackedArray} from "./globalArrayWriteTracking";
+import {AfterReadListener, AfterWriteListener, Clazz, DualUseTracker, ObjKey} from "./common";
 
 
 export abstract class RecordedRead {
@@ -15,7 +10,12 @@ export abstract class RecordedRead {
 
     abstract get isChanged(): boolean;
 
-    abstract onChange(listener: (newValue: unknown) => void): void;
+    /**
+     *
+     * @param listener
+     * @param trackOriginal true to install a tracker on the non-proxied (by this facade) original object
+     */
+    abstract onChange(listener: (newValue: unknown) => void, trackOriginal?: boolean): void;
 
     abstract offChange(listener: (newValue: unknown) => void): void;
 }
@@ -36,7 +36,7 @@ export class RecordedValueRead extends RecordedRead{
         throw new Error("Cannot check if simple value (not on object) has changed.");
     }
 
-    onChange(listener: (newValue: unknown) => void) {
+    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
         throw new Error("Cannot listen for changes on simple value (not on object)");
     }
 
@@ -53,7 +53,7 @@ export class RecordedValueRead extends RecordedRead{
 }
 
 export abstract class RecordedReadOnProxiedObject extends RecordedRead {
-    proxyHandler?: WatchedGraphHandler
+    proxyHandler!: WatchedGraphHandler
     /**
      * A bit redundant with proxyhandler. But for performance reasons, we leave it
      */
@@ -76,24 +76,19 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         return this.obj[this.key] !== this.value;
     }
 
-    onChange(listener: (newValue: unknown) => void) {
-        if(!this.proxyHandler) {
+    onChange(listener: (newValue: unknown) => void, trackOriginal=false) {
+        if(trackOriginal) {
             throw new Error("TODO");
         }
-        else {
-            this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
-            debug_numberOfPropertyChangeListeners++;
-        }
+        
+        this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
+        debug_numberOfPropertyChangeListeners++;
+        
     }
 
     offChange(listener: (newValue: unknown) => void) {
-        if(!this.proxyHandler) {
-            throw new Error("TODO");
-        }
-        else {
-            this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
-            debug_numberOfPropertyChangeListeners--;
-        }
+        this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
+        debug_numberOfPropertyChangeListeners--;
     }
 
     equals(other: RecordedRead) {
@@ -105,7 +100,54 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
     }
 }
 
+export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
+    values: unknown[];
+    
+    protected get origObj() {
+        return this.obj as unknown[];
+    }
 
+
+    constructor(values: unknown[]) {
+        super();
+        this.values = values;
+    }
+
+    onChange(listener: (newValue: unknown) => void, trackOrginal =false) {
+        if(trackOrginal) {
+            enhanceWithWriteTracker(this.origObj);
+        }
+        getWriteListenersForArray(this.origObj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: (newValue: unknown) => void) {
+        getWriteListenersForArray(this.origObj).afterUnspecificWrite.delete(listener);
+    }
+    
+    equals(other: RecordedRead): boolean {
+        if(! (other instanceof RecordedArrayValuesRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.arraysAreShallowlyEqual(this.values, other.values);
+    }
+
+    get isChanged(): boolean {
+        return this.arraysAreShallowlyEqual(this.values, this.origObj);
+    }
+
+    arraysAreShallowlyEqual(a: unknown[], b: unknown[]) {
+        if(a.length !== b.length) {
+            return false;
+        }
+        for(let i = 0;i<a.length;i++) {
+            if(a[i] !== b[i]) { // TODO add option for object instance equality
+                return false;
+            }
+        }
+        return true;
+    }
+}
 
 export class RecordedSet_has extends RecordedRead {
     proxyHandler?: WatchedGraphHandler
@@ -125,7 +167,7 @@ export class RecordedSet_has extends RecordedRead {
         throw new Error("TODO");
     }
 
-    onChange(listener: (newValue: unknown) => void) {
+    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
         throw new Error("TODO");
     }
 
@@ -152,7 +194,7 @@ export class RecordedSet_values extends RecordedRead {
         throw new Error("TODO");
     }
 
-    onChange(listener: (newValue: unknown) => void) {
+    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
         throw new Error("TODO");
     }
 
@@ -242,18 +284,97 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
     }
 
     protected crateHandler(target: object, graph: any): WatchedGraphHandler {
-        if(Array.isArray(target)) {
-            return new WatchedGraphHandler_Array(target, graph);
-        }
         return new WatchedGraphHandler(target, graph);
     }
 }
 
+export interface ForWatchedGraphHandler<T> extends DualUseTracker<T> {
+    /**
+     * Will return the handler when called through the handler
+     */
+    get _watchedGraphHandler(): WatchedGraphHandler;
+
+    /**
+     * The original (unproxied) object
+     */
+    get _target(): T
+}
+
+/**
+ * Patches methods / accessors
+ */
+class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWatchedGraphHandler<Array<T>> {
+    get _watchedGraphHandler(): WatchedGraphHandler {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the handler when called through the handler
+    }
+    get _target(): Array<T> {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the value when called through the handler
+    }
+
+    protected _fireAfterValuesRead() {
+        let recordedArrayValuesRead = new RecordedArrayValuesRead([...this._target]);
+        this._watchedGraphHandler?.fireAfterRead(recordedArrayValuesRead);
+    }
+
+    values(): ArrayIterator<T> {
+        try {
+            return this._target.values();
+        }
+        finally {
+            this._fireAfterValuesRead();
+        }
+    }
+
+    [Symbol.iterator](): ArrayIterator<T> {
+        try {
+            return this._target[Symbol.iterator]();
+        }
+        finally {
+            this._fireAfterValuesRead();
+        }
+    }
+
+    get length(): number {
+        try {
+            return this._target.length;
+        }
+        finally {
+            this._fireAfterValuesRead();
+        }
+    }
+
+}
+
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
+    /**
+     * Classes for watchers / write-trackers
+     */
+    static supervisorClassesMap = new Map<Clazz, WatchedGraphHandler["supervisorClasses"]>([
+        [Array, {watcher: WatchedArray_for_WatchedGraphHandler, writeTracker: WriteTrackedArray}]
+    ]);
+    
+    /**
+     * "Serve" these classes's methods and property accessors.
+     */
+    supervisorClasses: {watcher: Clazz, writeTracker: Clazz} | undefined
+
+    /**
+     * For plain objects
+     */
     afterWriteOnPropertyListeners = new MapSet<ObjKey, AfterWriteListener>();
 
     constructor(target: object, graph: WatchedGraph) {
         super(target, graph);
+
+        // determine watch and write- supervisorClasses:
+        for(const ClassToSupervise of WatchedGraphHandler.supervisorClassesMap.keys()) {
+            if(target instanceof ClassToSupervise) {
+                this.supervisorClasses = WatchedGraphHandler.supervisorClassesMap.get(ClassToSupervise);
+                if(target.constructor !== ClassToSupervise && target.constructor !== this.supervisorClasses!.writeTracker) {
+                    throw new Error(`Cannot create proxy of a **subclass** of ${ClassToSupervise} or ${this.supervisorClasses!.writeTracker}. It must be directly that class.`)
+                }
+            }
+        }
     }
 
     fireAfterRead(read: RecordedReadOnProxiedObject) {
@@ -264,19 +385,27 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 
     get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
-        if(p === "_getWatchedGraphHandler") { // TODO: use symbol for that (performance)
+        if(p === "_watchedGraphHandler") { // TODO: use symbol for that (performance)
             return this;
         }
+        if(p === "_target") { // TODO: use symbol for that (performance)
+            return this.target;
+        }
 
-        // Check for and use special supervisor class:
-        let watcherClass = getWatcherClassFor(this.target);
-        if(watcherClass && Object.getOwnPropertyDescriptor(watcherClass, p) !== undefined) { // There's a special supervisor class (i.e. WatchedArray) for target and it has that property (mostly a function) ?
-            //@ts-ignore
-            let value = watcherClass.prototype[p]; // use that special class
-            if(value != null && typeof value === "object") {
-                return this.graph.getProxyFor(value);
+        // Check for and use supervisor class:
+        if(this.supervisorClasses !== undefined) {
+            for(const SupervisorClass of [this.supervisorClasses.watcher, this.supervisorClasses.writeTracker]) {
+                let propOnSupervisor = Object.getOwnPropertyDescriptor(SupervisorClass.prototype, p);
+                if(propOnSupervisor !== undefined) { // Supervisor class is responsible for the property (or method) ?
+                    //@ts-ignore
+                    if(propOnSupervisor.get) { // Prop is a getter?
+                        return this.graph.getProxyFor(propOnSupervisor.get.apply(this.proxy))
+                    }
+                    else if(propOnSupervisor.value) { // Prop is a value, meaning a function. (Supervisors don't have fields)
+                        return SupervisorClass.prototype[p];
+                    }
+                }
             }
-            return value;
         }
 
         return super.get(fake_target, p, dontUse_receiver);
@@ -294,18 +423,10 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 }
 
-export interface ForWatchedGraphHandler {
-    /**
-     * Will return the handler when called through the handler
-     */
-    _getWatchedGraphHandler(): WatchedGraphHandler | undefined;
-}
-
-class WatchedGraphHandler_Array extends WatchedGraphHandler {
-    afterPushListeners = new MapSet<ObjKey, AfterWriteListener>();
 
 
-}
+
+
 /**
  * Only counts on vs off calls for a quick alignment check
  */

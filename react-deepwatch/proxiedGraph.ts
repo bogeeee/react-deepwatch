@@ -1,7 +1,7 @@
 /**
  *
  */
-import {ObjKey} from "./watchedGraph";
+import {ObjKey} from "./common";
 
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
@@ -16,21 +16,25 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
 
     protected abstract crateHandler(target: object, graph: any): HANDLER;
 
-    getProxyFor<O extends object>(obj: O): O {
-        if(this.proxies.has(obj)) { // Already the our proxied object ?
-            return obj;
+    getProxyFor<O>(value: O): O {
+        if(value === null || typeof value !== "object") { // not an object?
+            return value;
         }
 
-        let handlerForObj = this.objectsToProxyHandlers.get(obj);
-        if(handlerForObj !== undefined) { // obj was an unproxied object and we have the proxy for it ?
+        if(this.proxies.has(value)) { // Already our proxied object ?
+            return value;
+        }
+
+        let handlerForObj = this.objectsToProxyHandlers.get(value);
+        if(handlerForObj !== undefined) { // value was an unproxied object and we have the proxy for it ?
             return handlerForObj.proxy as O;
         }
 
-        handlerForObj = this.crateHandler(obj, this);
+        handlerForObj = this.crateHandler(value, this);
         // register:
         proxyToProxyHandler.set(handlerForObj.proxy, handlerForObj);
         this.proxies.add(handlerForObj.proxy);
-        this.objectsToProxyHandlers.set(obj, handlerForObj);
+        this.objectsToProxyHandlers.set(value, handlerForObj);
 
 
         return handlerForObj.proxy as O;

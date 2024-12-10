@@ -191,6 +191,8 @@ class RecordedLoadCall {
  * Fields that persist across re-render and across frames
  */
 class WatchedComponentPersistent {
+    options: WatchedComponentOptions;
+
     loadCalls: RecordedLoadCall[] = [];
 
     currentFrame?: Frame
@@ -263,6 +265,10 @@ class WatchedComponentPersistent {
         return this.currentFrame?.recentRenderRun !== undefined && this.reRenderRequested === this.currentFrame.recentRenderRun;
     }
 
+
+    constructor(options: WatchedComponentOptions) {
+        this.options = options;
+    }
 }
 
 /**
@@ -351,7 +357,7 @@ class Frame {
             }
             this.handleWatchedPropertyChange();
         }
-        this.startPropChangeListeningFns.push(() => read.onChange(changeListener));
+        this.startPropChangeListeningFns.push(() => read.onChange(changeListener, this.persistent.options.watchOutside !== false));
         this.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
     }
 }
@@ -418,7 +424,7 @@ let currentRenderRun: RenderRun| undefined;
 export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
     const outerResult = (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);
-        const [persistent] = useState(new WatchedComponentPersistent());
+        const [persistent] = useState(new WatchedComponentPersistent(options));
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
         // Call listeners (again) because may be the render was not "requested" through code in this package but happened some other way:

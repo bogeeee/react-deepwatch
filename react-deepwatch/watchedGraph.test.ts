@@ -1,7 +1,14 @@
 import {it, expect, test, beforeEach,describe, vitest, vi} from 'vitest'
-import {ObjKey, RecordedPropertyRead, RecordedRead, recordedReadsArraysAreEqual, WatchedGraph} from "./watchedGraph";
+import {
+    RecordedArrayValuesRead,
+    RecordedPropertyRead,
+    RecordedRead,
+    recordedReadsArraysAreEqual,
+    WatchedGraph
+} from "./watchedGraph";
 import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
+import {ObjKey} from "./common";
 
 beforeEach(() => {
 
@@ -220,9 +227,27 @@ describe('ProxiedGraph tests', () => {
 });
 
 describe('WatchedGraph tests', () => {
-    function readsEqual(reads: RecordedPropertyRead[], expected: { obj: object, key: ObjKey, value: unknown }[]) {
+    function readsEqual(reads: RecordedPropertyRead[], expected: { obj: object, key?: ObjKey, value?: unknown, values?: unknown[] }[]) {
+        function arraysAreShallowlyEqual(a?: unknown[], b?: unknown[]) {
+            if((a === undefined) && (b === undefined)) {
+                return true;
+            }
+            if(a === undefined || b === undefined) {
+                return false;
+            }
+            if(a.length !== b.length) {
+                return false;
+            }
+            for(let i = 0;i<a.length;i++) {
+                if(a[i] !== b[i]) { // TODO add option for object instance equality
+                    return false;
+                }
+            }
+            return true;
+        }
+
         return arraysAreEqualsByPredicateFn(reads, expected, (propRead, exp) => {
-            return propRead.obj === exp.obj && propRead.key === exp.key && propRead.value === exp.value;
+            return propRead.obj === exp.obj && propRead.key === exp.key && propRead.value === exp.value && arraysAreShallowlyEqual((propRead as unknown as RecordedArrayValuesRead).values, exp.values);
         })
     }
 
@@ -261,8 +286,7 @@ describe('WatchedGraph tests', () => {
         proxy.users.forEach(user => expect(user).toBeDefined());
         expect(readsEqual(reads, [
             {obj: sampleGraph, key: "users", value: sampleGraph.users},
-            {obj: sampleGraph.users, key: "forEach", value: sampleGraph.users.forEach},
-            {obj: sampleGraph.users, key: "length", value: sampleGraph.users.length},
+            {obj: sampleGraph.users, values: sampleGraph.users},
             {obj: sampleGraph.users, key: "0", value: sampleGraph.users[0]},
             {obj: sampleGraph.users, key: "1", value: sampleGraph.users[1]},
         ])).toBeTruthy();
@@ -389,7 +413,8 @@ describe('WatchedGraph record read and watch it', () => {
                 const testSetup = provideTestSetup();
 
                 let watchedGraph = new WatchedGraph();
-                const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                let origObj = testSetup.origObj;
+                const proxy = watchedGraph.getProxyFor(origObj);
                 let reads: RecordedPropertyRead[] = [];
                 watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
 
@@ -401,8 +426,20 @@ describe('WatchedGraph record read and watch it', () => {
                 //writerFn:
                 {
                     const changeHandler = vitest.fn();
-                    lastRead.onChange(changeHandler);
-                    testSetup.writerFn(proxy);
+                    if(mode==="With writes from inside") {
+                        lastRead.onChange(changeHandler);
+                        testSetup.writerFn(proxy);
+                    }
+                    else if(mode === "With writes from outside") {
+                        lastRead.onChange(changeHandler,true);
+                        testSetup.writerFn(origObj);
+                    }
+                    else if(mode === "with write from another WatchedGraph") {
+                        lastRead.onChange(changeHandler,true);
+                        let watchedGraph2 = new WatchedGraph();
+                        const proxy2 = watchedGraph2.getProxyFor(origObj);
+                        testSetup.writerFn(proxy2);
+                    }
                     expect(changeHandler).toBeCalledTimes(1);
                     lastRead.offChange(changeHandler);
                 }
@@ -411,8 +448,20 @@ describe('WatchedGraph record read and watch it', () => {
                 if(testSetup.falseWritesFn)
                 {
                     const changeHandler = vitest.fn();
-                    lastRead.onChange(changeHandler);
-                    testSetup.falseWritesFn(proxy);
+                    if(mode==="With writes from inside") {
+                        lastRead.onChange(changeHandler);
+                        testSetup.falseWritesFn(proxy);
+                    }
+                    else if(mode === "With writes from outside") {
+                        lastRead.onChange(changeHandler,true);
+                        testSetup.falseWritesFn(origObj);
+                    }
+                    else if(mode === "with write from another WatchedGraph") {
+                        lastRead.onChange(changeHandler,true);
+                        let watchedGraph2 = new WatchedGraph();
+                        const proxy2 = watchedGraph2.getProxyFor(origObj);
+                        testSetup.falseWritesFn(proxy2);
+                    }
                     expect(changeHandler).toBeCalledTimes(0);
                     lastRead.offChange(changeHandler);
                 }
@@ -430,8 +479,22 @@ describe('WatchedGraph record read and watch it', () => {
                     expect(reads.length).toBeGreaterThan(0);
                     const lastRead = reads[reads.length -1];
                     const changeHandler = vitest.fn();
-                    lastRead.onChange(changeHandler);
-                    testSetup.writerFn(proxy);
+
+                    if(mode==="With writes from inside") {
+                        lastRead.onChange(changeHandler);
+                        testSetup.writerFn(proxy);
+                    }
+                    else if(mode === "With writes from outside") {
+                        lastRead.onChange(changeHandler,true);
+                        testSetup.writerFn(origObj);
+                    }
+                    else if(mode === "with write from another WatchedGraph") {
+                        lastRead.onChange(changeHandler,true);
+                        let watchedGraph2 = new WatchedGraph();
+                        const proxy2 = watchedGraph2.getProxyFor(origObj);
+                        testSetup.writerFn(proxy2);
+                    }
+
                     expect(changeHandler).toBeCalledTimes(0);
                     lastRead.offChange(changeHandler);
                 }
@@ -476,10 +539,9 @@ describe('WatchedGraph record read and watch it', () => {
         const obj: {} = {};
         return {
             origObj: ["a", "b", "c"],
-            readerFn: (obj) => {read(obj.values())},
-            writerFn: (obj) => () => {obj.push("d")},
-            falseReadsFn: (obj) => {},
-            falseWritesFn: (obj) => {}
+            readerFn: (obj) => {read([...obj])},
+            writerFn: (obj) => {obj.push("d")},
+            falseWritesFn: (obj) => {obj[1] = "b"}
         }
     });
 
