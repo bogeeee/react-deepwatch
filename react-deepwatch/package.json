@@ -27,7 +27,7 @@
     "devPlayground.ts": "tsx devPlayground.ts",
     "clean": "tsc --build --clean && rimraf dist LICENSE readme.md",
     "build": "tsc --build --force && tsc -module ES6 --outDir dist/mjs",
-    "test": "npm run clean && vitest --clearScreen --hideSkippedTests",
+    "test": "npm run clean && vitest --clearScreen --hideSkippedTests --poolOptions.threads.singleThread",
     "test:web:prepare": "npm install --prefix ../tests/web dev --ignore-scripts",
     "test:web": "npm run clean && npm run --prefix ../tests/web dev",
     "prepublish": "npm run clean && npm run build && ncp ../LICENSE ./LICENSE && ncp ../readme.md ./readme.md",

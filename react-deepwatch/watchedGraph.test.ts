@@ -9,6 +9,7 @@ import {
 import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
 import {ObjKey} from "./common";
+import {enhanceWithWriteTracker} from "./globalWriteTracking";
 
 beforeEach(() => {
 
@@ -226,6 +227,84 @@ describe('ProxiedGraph tests', () => {
 
 });
 
+describe('GlobalObjectWriteTracking tests', () => {
+    let called: string = "";
+    test("Object hierarchy should be intact", ()=> {
+        class A {
+            myMethodOnlyA() {
+                return "a"
+            }
+            get propWithGetterOnlyA() {
+                return "a";
+            }
+            set setterOnlyA(value: string) {
+                if(value !== "v") {
+                    throw new Error("invalid value")
+                }
+                called+="a";
+            }
+
+            myMethod() {
+                return "a"
+            }
+
+            myMethodWithSuper() {
+                return "a"
+            }
+            get propWithSuperGetter() {
+                return "a";
+            }
+            set setterWithSuper(value: string) {
+                if(value !== "v") {
+                    throw new Error("invalid value")
+                }
+                called+="a";
+            }
+
+        }
+
+        class B extends A {
+            myMethod() {
+                return "b"
+            }
+
+            myMethodWithSuper() {
+                return super.myMethodWithSuper() + "b";
+            }
+
+            get propWithGetter() {
+                return "b";
+            }
+            get propWithSuperGetter() {
+                return super.propWithSuperGetter + "b";
+            }
+            set setterWithSuper(value: string) {
+                if(value !== "v") {
+                    throw new Error("invalid value")
+                }
+                super.setterWithSuper = value;
+                called+="b";
+            }
+
+        }
+
+        const b = new B()
+        enhanceWithWriteTracker(b);
+        expect(b.myMethod()).toEqual("b");
+        expect(b.myMethodOnlyA()).toEqual("a");
+        expect(b.myMethodWithSuper()).toEqual("ab");
+        expect(b.propWithGetter).toEqual("b");
+        expect(b.propWithGetterOnlyA).toEqual("a");
+        expect(b.propWithSuperGetter).toEqual("ab");
+        called="";b.setterOnlyA = "v";expect(called).toEqual("a");
+        called="";b.setterWithSuper = "v";expect(called).toEqual("ab");
+
+        expect(b instanceof B).toBeTruthy();
+        expect(b instanceof A).toBeTruthy();
+
+    });
+});
+
 describe('WatchedGraph tests', () => {
     function readsEqual(reads: RecordedPropertyRead[], expected: { obj: object, key?: ObjKey, value?: unknown, values?: unknown[] }[]) {
         function arraysAreShallowlyEqual(a?: unknown[], b?: unknown[]) {
@@ -408,97 +487,95 @@ describe('WatchedGraph record read and watch it', () => {
     }
 
     function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void, writerFn: (obj: T) => void, falseReadsFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
-        for(const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
-            test(`${name} ${mode}`, () => {
-                const testSetup = provideTestSetup();
-
-                let watchedGraph = new WatchedGraph();
-                let origObj = testSetup.origObj;
-                const proxy = watchedGraph.getProxyFor(origObj);
-                let reads: RecordedPropertyRead[] = [];
-                watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
-
-                reads = [];
-                testSetup.readerFn(proxy);
-                expect(reads.length).toBeGreaterThan(0);
-                const lastRead = reads[reads.length -1];
-
-                //writerFn:
-                {
-                    const changeHandler = vitest.fn();
-                    if(mode==="With writes from inside") {
-                        lastRead.onChange(changeHandler);
-                        testSetup.writerFn(proxy);
-                    }
-                    else if(mode === "With writes from outside") {
-                        lastRead.onChange(changeHandler,true);
-                        testSetup.writerFn(origObj);
-                    }
-                    else if(mode === "with write from another WatchedGraph") {
-                        lastRead.onChange(changeHandler,true);
-                        let watchedGraph2 = new WatchedGraph();
-                        const proxy2 = watchedGraph2.getProxyFor(origObj);
-                        testSetup.writerFn(proxy2);
-                    }
-                    expect(changeHandler).toBeCalledTimes(1);
-                    lastRead.offChange(changeHandler);
-                }
-
-                //falseWriteFn:
-                if(testSetup.falseWritesFn)
-                {
-                    const changeHandler = vitest.fn();
-                    if(mode==="With writes from inside") {
-                        lastRead.onChange(changeHandler);
-                        testSetup.falseWritesFn(proxy);
-                    }
-                    else if(mode === "With writes from outside") {
-                        lastRead.onChange(changeHandler,true);
-                        testSetup.falseWritesFn(origObj);
-                    }
-                    else if(mode === "with write from another WatchedGraph") {
-                        lastRead.onChange(changeHandler,true);
-                        let watchedGraph2 = new WatchedGraph();
-                        const proxy2 = watchedGraph2.getProxyFor(origObj);
-                        testSetup.falseWritesFn(proxy2);
-                    }
-                    expect(changeHandler).toBeCalledTimes(0);
-                    lastRead.offChange(changeHandler);
-                }
-
-
-                //falseReadFn:
-                if(testSetup.falseReadsFn)
-                {
+        for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
+            for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
+                test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
                     const testSetup = provideTestSetup();
+
                     let watchedGraph = new WatchedGraph();
-                    const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                    let origObj = testSetup.origObj;
+                    if(withNestedFacade) {
+                        origObj = new WatchedGraph().getProxyFor(origObj);
+                    }
+
+                    const proxy = watchedGraph.getProxyFor(origObj);
                     let reads: RecordedPropertyRead[] = [];
                     watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
-                    testSetup.falseReadsFn!(proxy);
+
+                    reads = [];
+                    testSetup.readerFn(proxy);
                     expect(reads.length).toBeGreaterThan(0);
-                    const lastRead = reads[reads.length -1];
-                    const changeHandler = vitest.fn();
+                    const lastRead = reads[reads.length - 1];
 
-                    if(mode==="With writes from inside") {
-                        lastRead.onChange(changeHandler);
-                        testSetup.writerFn(proxy);
-                    }
-                    else if(mode === "With writes from outside") {
-                        lastRead.onChange(changeHandler,true);
-                        testSetup.writerFn(origObj);
-                    }
-                    else if(mode === "with write from another WatchedGraph") {
-                        lastRead.onChange(changeHandler,true);
-                        let watchedGraph2 = new WatchedGraph();
-                        const proxy2 = watchedGraph2.getProxyFor(origObj);
-                        testSetup.writerFn(proxy2);
+                    //writerFn:
+                    {
+                        const changeHandler = vitest.fn();
+                        if (mode === "With writes from inside") {
+                            lastRead.onChange(changeHandler);
+                            testSetup.writerFn(proxy);
+                        } else if (mode === "With writes from outside") {
+                            lastRead.onChange(changeHandler, true);
+                            testSetup.writerFn(origObj);
+                        } else if (mode === "with write from another WatchedGraph") {
+                            lastRead.onChange(changeHandler, true);
+                            let watchedGraph2 = new WatchedGraph();
+                            const proxy2 = watchedGraph2.getProxyFor(origObj);
+                            testSetup.writerFn(proxy2);
+                        }
+                        expect(changeHandler).toBeCalledTimes(1);
+                        lastRead.offChange(changeHandler);
                     }
 
-                    expect(changeHandler).toBeCalledTimes(0);
-                    lastRead.offChange(changeHandler);
-                }
-            });
+                    //falseWriteFn:
+                    if (testSetup.falseWritesFn) {
+                        const changeHandler = vitest.fn();
+                        if (mode === "With writes from inside") {
+                            lastRead.onChange(changeHandler);
+                            testSetup.falseWritesFn(proxy);
+                        } else if (mode === "With writes from outside") {
+                            lastRead.onChange(changeHandler, true);
+                            testSetup.falseWritesFn(origObj);
+                        } else if (mode === "with write from another WatchedGraph") {
+                            lastRead.onChange(changeHandler, true);
+                            let watchedGraph2 = new WatchedGraph();
+                            const proxy2 = watchedGraph2.getProxyFor(origObj);
+                            testSetup.falseWritesFn(proxy2);
+                        }
+                        expect(changeHandler).toBeCalledTimes(0);
+                        lastRead.offChange(changeHandler);
+                    }
+
+
+                    //falseReadFn:
+                    if (testSetup.falseReadsFn) {
+                        const testSetup = provideTestSetup();
+                        let watchedGraph = new WatchedGraph();
+                        const proxy = watchedGraph.getProxyFor(withNestedFacade?new WatchedGraph().getProxyFor(testSetup.origObj):testSetup.origObj);
+                        let reads: RecordedPropertyRead[] = [];
+                        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+                        testSetup.falseReadsFn!(proxy);
+                        expect(reads.length).toBeGreaterThan(0);
+                        const lastRead = reads[reads.length - 1];
+                        const changeHandler = vitest.fn();
+
+                        if (mode === "With writes from inside") {
+                            lastRead.onChange(changeHandler);
+                            testSetup.writerFn(proxy);
+                        } else if (mode === "With writes from outside") {
+                            lastRead.onChange(changeHandler, true);
+                            testSetup.writerFn(origObj);
+                        } else if (mode === "with write from another WatchedGraph") {
+                            lastRead.onChange(changeHandler, true);
+                            let watchedGraph2 = new WatchedGraph();
+                            const proxy2 = watchedGraph2.getProxyFor(origObj);
+                            testSetup.writerFn(proxy2);
+                        }
+
+                        expect(changeHandler).toBeCalledTimes(0);
+                        lastRead.offChange(changeHandler);
+                    }
+                });
+            }
         }
 
         test(`${name}: Recorded reads are equals when run twice`, () => {
