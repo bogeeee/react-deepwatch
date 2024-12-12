@@ -17,25 +17,18 @@ export interface DualUseTracker<T> {
     get _target(): T
 }
 
-export function getGetter(target: object, propName: ObjKey): (() => unknown) | undefined {
-    let propertyDescriptor = Object.getOwnPropertyDescriptor(target, propName);
-    if(propertyDescriptor?.get) {
-        return propertyDescriptor.get;
+/**
+ * Like Object.getOwnPropertyDescriptor. But for all parent classes
+ * @param o
+ * @param p
+ */
+export function getPropertyDescriptor(o: object, p: PropertyKey):  PropertyDescriptor | undefined {
+    let result = Object.getOwnPropertyDescriptor(o, p);
+    if(result !== undefined) {
+        return result;
     }
-    let proto = Object.getPrototypeOf(target);
-    if(proto != undefined) {
-        return getGetter(proto, propName);
-    }
-
-}
-
-export function getSetter(target: object, propName: ObjKey): ((value: any) => void) | undefined {
-    let propertyDescriptor = Object.getOwnPropertyDescriptor(target, propName);
-    if(propertyDescriptor?.set) {
-        return propertyDescriptor.set;
-    }
-    let proto = Object.getPrototypeOf(target);
-    if(proto != undefined) {
-        return getSetter(proto, propName);
+    let proto = Object.getPrototypeOf(o);
+    if(proto !== null) {
+        return getPropertyDescriptor(proto, p);
     }
 }

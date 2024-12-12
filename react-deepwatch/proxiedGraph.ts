@@ -1,7 +1,7 @@
 /**
  *
  */
-import {getGetter, getSetter, ObjKey} from "./common";
+import {getPropertyDescriptor, ObjKey} from "./common";
 
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
@@ -70,7 +70,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
     }
 
     get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
-        const getter = getGetter(this.target, p);
+        const getter = getPropertyDescriptor(this.target, p)?.get;
         let value;
         if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined) { // Access via property accessor ?
             return value = getter.apply(this.proxy,[]); // Call the accessor with a proxied this
@@ -103,7 +103,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
     }
 
     set(fake_target:object, p:string | symbol, value:any, receiver:any) {
-        const setter = getSetter(this.target, p);
+        const setter = getPropertyDescriptor(this.target, p)?.set;
         if(this.graph.propertyAccessorsAsWhiteBox && setter !== undefined) { // Setting via property access ?
             setter.apply(this.proxy,[value]); // Only call the accessor with a proxied this
         }
