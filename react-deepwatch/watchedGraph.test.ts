@@ -10,6 +10,7 @@ import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
 import {ObjKey} from "./common";
 import {enhanceWithWriteTracker} from "./globalWriteTracking";
+import {ProxiedGraph} from "./proxiedGraph";
 
 beforeEach(() => {
 
@@ -49,12 +50,7 @@ describe('ProxiedGraph tests', () => {
         expect(collected).toEqual(origArray);
     })
 
-    test("Object.keys", () => {
-        const origObj = {a: "x", arr:["a","b"]};
-        const proxy = new WatchedGraph().getProxyFor(origObj);
-        expect(Object.keys(proxy)).toEqual(["a", "arr"]);
-        expect(Object.keys(proxy.arr)).toEqual(Object.keys(origObj.arr));
-    })
+
 
     test("Functions. 'this' should be the proxy", () => {
         const origObj = {
@@ -133,11 +129,6 @@ describe('ProxiedGraph tests', () => {
         expect(Object.keys(proxy)).toEqual(["myNewProperty"]);
     })
 
-    test("Non modification", () => {
-        const origObj = {a: "a"};
-        const proxy = new WatchedGraph().getProxyFor(origObj);
-        proxy.a = "a"; // Should at least not trigger an error
-    })
 
     test("instaceof", () => {
         class MyClass {
@@ -160,8 +151,51 @@ describe('ProxiedGraph tests', () => {
     });
 
 
-    test("Property accessors", () => {
-        const origObj = new class {
+
+
+    test("Readonly props should not cause an error - fails - skipped", ()=> {
+        return; // skip, cause we wont fix this soon
+
+        const orig:{prop: object} = {} as any
+        Object.defineProperty(orig, "prop", {
+            value: {},
+            writable: false
+        })
+
+        let watchedGraph = new WatchedGraph();
+        const proxy = watchedGraph.getProxyFor(orig);
+        expect(proxy.prop).toStrictEqual(orig.prop);
+    })
+
+});
+
+describe('ProxiedGraph and direct enhancement tests', () => {
+    for (const mode of [{
+        name: "ProxiedGraph", proxyOrEnhance(o: obj) {
+            return new WatchedGraph().getProxyFor(o)
+        }
+    }, {
+        name: "Direct enhancement", proxyOrEnhance(o: obj) {
+            enhanceWithWriteTracker(o);
+            return o;
+        }
+    }]) {
+
+        test(`${mode.name}: Object.keys`, () => {
+            const origObj = {a: "x", arr:["a","b"]};
+            const proxy = mode.proxyOrEnhance(origObj);
+            expect(Object.keys(proxy)).toEqual(["a", "arr"]);
+            expect(Object.keys(proxy.arr)).toEqual(Object.keys(origObj.arr));
+        })
+
+        test(`${mode.name}: Non modification`, () => {
+            const origObj = {a: "a"};
+            const proxy = mode.proxyOrEnhance(origObj);
+            proxy.a = "a"; // Should at least not trigger an error
+        })
+
+        test(`${mode.name}: Property accessors`, () => {
+            const origObj = new class {
                 get artificialProprty() {
                     return "some";
                 }
@@ -181,128 +215,111 @@ describe('ProxiedGraph tests', () => {
                 }
             }
 
-        const proxy = new WatchedGraph().getProxyFor(origObj);
+            const proxy = mode.proxyOrEnhance(origObj);
 
-        expect(proxy.a).toEqual("");
+            expect(proxy.a).toEqual("");
 
-        proxy.a = "x"
-        expect(proxy.a).toEqual("x");
+            proxy.a = "x"
+            expect(proxy.a).toEqual("x");
 
-        proxy.setMe = "y"
-        expect(proxy.a).toEqual("y");
+            proxy.setMe = "y"
+            expect(proxy.a).toEqual("y");
 
-        expect(proxy.artificialProprty).toEqual("some");
+            expect(proxy.artificialProprty).toEqual("some");
 
-    })
-
-    test("Readonly props should not cause an error - fails - skipped", ()=> {
-        return; // skip, cause we wont fix this soon
-
-        const orig:{prop: object} = {} as any
-        Object.defineProperty(orig, "prop", {
-            value: {},
-            writable: false
         })
 
-        let watchedGraph = new WatchedGraph();
-        const proxy = watchedGraph.getProxyFor(orig);
-        expect(proxy.prop).toStrictEqual(orig.prop);
-    })
+        test(`${mode.name}: Readonly props from prototypes should not cause an error`, ()=> {
+            class A {
+                prop!: object
+            }
+            Object.defineProperty(A.prototype, "prop", {
+                value: {},
+                writable: false
+            })
 
-    test("Readonly props from prototypes should not cause an error", ()=> {
-        class A {
-            prop!: object
-        }
-        Object.defineProperty(A.prototype, "prop", {
-            value: {},
-            writable: false
+            const orig = new A();
+
+            const proxy = mode.proxyOrEnhance(orig);
+            expect(proxy.prop).toStrictEqual(orig.prop);
         })
 
-        const orig = new A();
-
-        let watchedGraph = new WatchedGraph();
-        const proxy = watchedGraph.getProxyFor(orig);
-        expect(proxy.prop).toStrictEqual(orig.prop);
-    })
-
-});
-
-describe('GlobalObjectWriteTracking tests', () => {
-    let called: string = "";
-    test("Object hierarchy should be intact", ()=> {
-        class A {
-            myMethodOnlyA() {
-                return "a"
-            }
-            get propWithGetterOnlyA() {
-                return "a";
-            }
-            set setterOnlyA(value: string) {
-                if(value !== "v") {
-                    throw new Error("invalid value")
+        test(`${mode.name}: Class hierarchy should be intact`, ()=> {
+            let called: string = "";
+            class A {
+                myMethodOnlyA() {
+                    return "a"
                 }
-                called+="a";
-            }
-
-            myMethod() {
-                return "a"
-            }
-
-            myMethodWithSuper() {
-                return "a"
-            }
-            get propWithSuperGetter() {
-                return "a";
-            }
-            set setterWithSuper(value: string) {
-                if(value !== "v") {
-                    throw new Error("invalid value")
+                get propWithGetterOnlyA() {
+                    return "a";
                 }
-                called+="a";
-            }
-
-        }
-
-        class B extends A {
-            myMethod() {
-                return "b"
-            }
-
-            myMethodWithSuper() {
-                return super.myMethodWithSuper() + "b";
-            }
-
-            get propWithGetter() {
-                return "b";
-            }
-            get propWithSuperGetter() {
-                return super.propWithSuperGetter + "b";
-            }
-            set setterWithSuper(value: string) {
-                if(value !== "v") {
-                    throw new Error("invalid value")
+                set setterOnlyA(value: string) {
+                    if(value !== "v") {
+                        throw new Error("invalid value")
+                    }
+                    called+="a";
                 }
-                super.setterWithSuper = value;
-                called+="b";
+
+                myMethod() {
+                    return "a"
+                }
+
+                myMethodWithSuper() {
+                    return "a"
+                }
+                get propWithSuperGetter() {
+                    return "a";
+                }
+                set setterWithSuper(value: string) {
+                    if(value !== "v") {
+                        throw new Error("invalid value")
+                    }
+                    called+="a";
+                }
+
             }
 
-        }
+            class B extends A {
+                myMethod() {
+                    return "b"
+                }
 
-        const b = new B()
-        enhanceWithWriteTracker(b);
-        expect(b.myMethod()).toEqual("b");
-        expect(b.myMethodOnlyA()).toEqual("a");
-        expect(b.myMethodWithSuper()).toEqual("ab");
-        expect(b.propWithGetter).toEqual("b");
-        expect(b.propWithGetterOnlyA).toEqual("a");
-        expect(b.propWithSuperGetter).toEqual("ab");
-        called="";b.setterOnlyA = "v";expect(called).toEqual("a");
-        called="";b.setterWithSuper = "v";expect(called).toEqual("ab");
+                myMethodWithSuper() {
+                    return super.myMethodWithSuper() + "b";
+                }
 
-        expect(b instanceof B).toBeTruthy();
-        expect(b instanceof A).toBeTruthy();
+                get propWithGetter() {
+                    return "b";
+                }
+                get propWithSuperGetter() {
+                    return super.propWithSuperGetter + "b";
+                }
+                set setterWithSuper(value: string) {
+                    if(value !== "v") {
+                        throw new Error("invalid value")
+                    }
+                    super.setterWithSuper = value;
+                    called+="b";
+                }
 
-    });
+            }
+
+            const b = mode.proxyOrEnhance(new B());
+            expect(b.myMethod()).toEqual("b");
+            expect(b.myMethodOnlyA()).toEqual("a");
+            expect(b.myMethodWithSuper()).toEqual("ab");
+            expect(b.propWithGetter).toEqual("b");
+            expect(b.propWithGetterOnlyA).toEqual("a");
+            expect(b.propWithSuperGetter).toEqual("ab");
+            called="";b.setterOnlyA = "v";expect(called).toEqual("a");
+            called="";b.setterWithSuper = "v";expect(called).toEqual("ab");
+
+            expect(b instanceof B).toBeTruthy();
+            expect(b instanceof A).toBeTruthy();
+
+        });
+
+    }
 });
 
 describe('WatchedGraph tests', () => {
