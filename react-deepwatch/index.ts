@@ -150,9 +150,14 @@ class RecordedLoadCall {
     async executeRePoll() {
         try {
             const value = await this.exec();
-            const isUnchangedChanged = this.result.state === "resolved" && (value === null || (!(typeof value === "object"))) && value === this.result.resolvedValue;
+            const isUnchangedPrimitiveValue = this.result.state === "resolved" && (value === null || (!(typeof value === "object"))) && value === this.result.resolvedValue;
             this.result = {state: "resolved", resolvedValue:value}
-            if (isUnchangedChanged) {
+
+            if(this.isObsolete) {
+                return;
+            }
+
+            if (isUnchangedPrimitiveValue) {
                 // Loaded value did not change / No re-render needed because the fallback is already displayed
             } else {
                 this.watchedComponentPersistent.handleChangeEvent();
@@ -160,7 +165,9 @@ class RecordedLoadCall {
         }
         catch (e) {
             this.result = {state: "rejected", rejectReason: e};
-            this.watchedComponentPersistent.handleChangeEvent();
+            if(!this.isObsolete) {
+                this.watchedComponentPersistent.handleChangeEvent();
+            }
         }
     }
 
@@ -792,6 +799,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
             resultPromise.then((value) => {
                 loadCall.result = {state: "resolved", resolvedValue: value};
 
+                if(loadCall.isObsolete) {
+                    return;
+                }
+
                 if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
                     // Loaded value did not change / No re-render needed because the fallback is already displayed
                     if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
@@ -803,6 +814,10 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
             });
             resultPromise.catch(reason => {
                 loadCall.result = {state: "rejected", rejectReason: reason}
+
+                if(loadCall.isObsolete) {
+                    return;
+                }
 
                 persistent.handleChangeEvent(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
             })
