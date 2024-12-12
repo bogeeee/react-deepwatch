@@ -16,3 +16,26 @@ export interface DualUseTracker<T> {
      */
     get _target(): T
 }
+
+export function getGetter(target: object, propName: ObjKey): (() => unknown) | undefined {
+    let propertyDescriptor = Object.getOwnPropertyDescriptor(target, propName);
+    if(propertyDescriptor?.get) {
+        return propertyDescriptor.get;
+    }
+    let proto = Object.getPrototypeOf(target);
+    if(proto != undefined) {
+        return getGetter(proto, propName);
+    }
+
+}
+
+export function getSetter(target: object, propName: ObjKey): ((value: any) => void) | undefined {
+    let propertyDescriptor = Object.getOwnPropertyDescriptor(target, propName);
+    if(propertyDescriptor?.set) {
+        return propertyDescriptor.set;
+    }
+    let proto = Object.getPrototypeOf(target);
+    if(proto != undefined) {
+        return getSetter(proto, propName);
+    }
+}
