@@ -78,7 +78,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
 
     onChange(listener: (newValue: unknown) => void, trackOriginal=false) {
         if(trackOriginal) {
-            throw new Error("TODO");
+            enhanceWithWriteTracker(this.obj);
         }
         
         this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
@@ -113,8 +113,8 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
         this.values = values;
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOrginal =false) {
-        if(trackOrginal) {
+    onChange(listener: (newValue: unknown) => void, trackOriginal =false) {
+        if(trackOriginal) {
             enhanceWithWriteTracker(this.origObj);
         }
         getWriteListenersForArray(this.origObj).afterUnspecificWrite.add(listener);
@@ -371,7 +371,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
             if(target instanceof ClassToSupervise) {
                 this.supervisorClasses = WatchedGraphHandler.supervisorClassesMap.get(ClassToSupervise);
                 if(target.constructor !== ClassToSupervise && target.constructor !== this.supervisorClasses!.writeTracker) {
-                    throw new Error(`Cannot create proxy of a **subclass** of ${ClassToSupervise} or ${this.supervisorClasses!.writeTracker}. It must be directly that class.`)
+                    throw new Error(`Cannot create proxy of a **subclass** of ${ClassToSupervise.name} or ${this.supervisorClasses!.writeTracker.name}. It must be directly that class.`)
                 }
             }
         }

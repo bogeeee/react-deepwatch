@@ -5,6 +5,7 @@ import {RecordedReadOnProxiedObject, WatchedGraphHandler} from "./watchedGraph";
 import {MapSet} from "./Util";
 import {WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterWriteListener, Clazz, ObjKey} from "./common";
+import {ObjectProxyHandler} from "./globalObjectWriteTracking";
 
 
 /**
@@ -43,5 +44,9 @@ export function enhanceWithWriteTracker(obj: object) {
     let watcherClass = getWriteTrackerClassFor(obj);
     if(watcherClass !== undefined) {
         Object.setPrototypeOf(obj, watcherClass.prototype);
+    }
+    else {
+        const proxy = new ObjectProxyHandler(obj).proxy;
+        Object.setPrototypeOf(obj, proxy);
     }
 }
