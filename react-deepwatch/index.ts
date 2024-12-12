@@ -309,6 +309,10 @@ class Frame {
         return watchedGraph || (watchedGraph = new WatchedGraph()); // Lazy initialize global variable
     }
 
+    constructor() {
+        this.watchPropertyChange_changeListenerFn = this.watchPropertyChange_changeListenerFn.bind(this); // method is handed over as function but uses "this" inside.
+    }
+
     startPropChangeListeningFns: (()=>void)[] = [];
     /**
      * Makes the frame become "alive". Listens for property changes and re-polls poll(...) statements.
@@ -351,14 +355,15 @@ class Frame {
 
     watchPropertyChange(read: RecordedRead) {
         // Re-render on a change of the read value:
-        const changeListener = (newValue: unknown) => {
-            if (currentRenderRun) {
-                throw new Error("You must not modify a watched object during the render run.");
-            }
-            this.handleWatchedPropertyChange();
+        this.startPropChangeListeningFns.push(() => read.onChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */, this.persistent.options.watchOutside !== false));
+        this.cleanUpPropChangeListenerFns.push(() => read.offChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */));
+    }
+
+    protected watchPropertyChange_changeListenerFn(newValue: unknown) {
+        if (currentRenderRun) {
+            throw new Error("You must not modify a watched object during the render run.");
         }
-        this.startPropChangeListeningFns.push(() => read.onChange(changeListener, this.persistent.options.watchOutside !== false));
-        this.cleanUpPropChangeListenerFns.push(() => read.offChange(changeListener));
+        this.handleWatchedPropertyChange();
     }
 }
 
@@ -537,7 +542,7 @@ type WatchedOptions = {
      * Called on a change to one of those properties, that were read-recorded in the component function (through the proxy of course).
      * Reacts also on external changes / not done through the proxy.
      */
-    onRecorededChange: () => void
+    onRecordedChange: () => void
 }
 
 function watched<T extends object>(obj: T, options?: WatchedOptions): T {
