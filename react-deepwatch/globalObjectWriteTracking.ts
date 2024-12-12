@@ -36,22 +36,30 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         this.proxy = new Proxy(targetForProxy, this);
     }
 
-    get(fake_target:object, key: ObjKey, value:any, receiver:any): any {
-        const ownPropertyDescriptor = Object.getOwnPropertyDescriptor(this.target, key);
-        if(ownPropertyDescriptor !== undefined) {
-            let getter = ownPropertyDescriptor.get;
-            if(getter !== undefined) {
-               return getter.apply(this.target);
+    get(fake_target:object, key: ObjKey, receiver:any): any {
+        // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the original prototype chain which again sees the proxy in there and calls get (endless recursion)
+        // Instead, do, what js would do internally:
+        const inner = (currentLevel: object) => {
+            const ownPropertyDescriptor = Object.getOwnPropertyDescriptor(currentLevel, key);
+            if (ownPropertyDescriptor !== undefined) {
+                let getter = ownPropertyDescriptor.get;
+                if (getter !== undefined) {
+                    return getter.apply(this.target);
+                } else if (ownPropertyDescriptor.value) {
+                    return ownPropertyDescriptor.value;
+                } else { // only a setter but nothing else ?
+                    return undefined;
+                }
             }
-            else if(ownPropertyDescriptor.value) {
-                return ownPropertyDescriptor.value;
-            }
-            else { // only a setter but nothing else ?
+
+            let superLevel = Object.getPrototypeOf(currentLevel); //  this properly skips the proxy
+            if(superLevel === null) {
                 return undefined;
             }
+            return inner(superLevel);
         }
-        //@ts-ignore
-        return this.origPrototype[key];
+
+        return inner(this.target);
     }
 
     set(fake_target:object, key: ObjKey, value:any, receiver:any) {
