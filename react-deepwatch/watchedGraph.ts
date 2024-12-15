@@ -78,7 +78,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
 
     onChange(listener: (newValue: unknown) => void, trackOriginal=false) {
         if(trackOriginal) {
-            enhanceWithWriteTracker(this.obj);
+            enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the propery of interest. See ObjectProxyHandler#installSetterTrap
         }
         
         this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);

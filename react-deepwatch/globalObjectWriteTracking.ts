@@ -30,59 +30,73 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         this.target = target;
         this.origPrototype = Object.getPrototypeOf(target);
 
+
+        Object.getOwnPropertyNames(target).forEach(p => this.installSetterTrap(p));
+
         // Create proxy:
         //const targetForProxy = {}; // The virtual way
         const targetForProxy=target // Preserves Object.keys and instanceof behaviour :), iterators and other stuff. But the downside with this is, that it does not allow to proxy read only properties
         this.proxy = new Proxy(targetForProxy, this);
     }
 
-    get(fake_target:object, key: ObjKey, receiver:any): any {
-        // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the original prototype chain which again sees the proxy in there and calls get (endless recursion)
-        // Instead, do, what js would do internally:
-        const inner = (currentLevel: object) => {
-            const ownPropertyDescriptor = Object.getOwnPropertyDescriptor(currentLevel, key);
-            if (ownPropertyDescriptor !== undefined) {
-                let getter = ownPropertyDescriptor.get;
-                if (getter !== undefined) {
-                    return getter.apply(this.target);
-                } else if (ownPropertyDescriptor.value) {
-                    return ownPropertyDescriptor.value;
-                } else { // only a setter but nothing else ?
-                    return undefined;
+    installSetterTrap(key: ObjKey) {
+        let target = this.target;
+        let origDescriptor = getPropertyDescriptor(target, key);
+        let currentValue = origDescriptor?.value /* performance */ || target[key];
+        const origSetter = origDescriptor?.set;
+        const origGetter = origDescriptor?.get;
+        Object.defineProperty( target, key, {
+            set(newValue: any) {
+                const writeListenersForTarget = getWriteListenersForObject(target);
+
+                if(origSetter !== undefined) {
+                    origSetter.apply(target, [newValue]);  // call the setter
+                    writeListenersForTarget.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                    return;
                 }
-            }
 
-            let superLevel = Object.getPrototypeOf(currentLevel); //  this properly skips the proxy
-            if(superLevel === null) {
-                return undefined;
+                //@ts-ignore
+                if (newValue !== currentValue) { // modify ?
+                    //@ts-ignore
+                    currentValue = newValue;
+                    writeListenersForTarget.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                }
+            },
+            get() {
+                if(origGetter !== undefined) {
+                    return origGetter.apply(target);  // call the getter
+                }
+                return currentValue;
             }
-            return inner(superLevel);
+        })
+    }
+
+    get(fake_target:object, key: ObjKey, receiver:any): any {
+        // Instead, do, what js would do internally:
+        const propDesc = getPropertyDescriptor(this.target, key)
+        if (propDesc !== undefined) {
+            let getter = propDesc.get;
+            if (getter !== undefined) {
+                return getter.apply(this.target);
+            }
+            return  propDesc.value;
         }
-
-        return inner(this.target);
     }
 
     set(fake_target:object, key: ObjKey, value:any, receiver:any) {
-        let writeListenersForTarget = getWriteListenersForObject(this.target);
-        const setter = getPropertyDescriptor(this.target, key)?.set;
-        if(setter !== undefined) {
-            setter.apply(this.target,[value]); // call the setter
-            writeListenersForTarget.afterSetterInvoke_listeners.get(key)?.forEach(l => l(value));
-            return true;
-        }
+        // if this method got called, there is no setter trap installed yet
 
-        //@ts-ignore
-        if (this.target[key] !== value) { // modify ?
-            //@ts-ignore
-            this.target[key] = value
-            writeListenersForTarget.afterSetterInvoke_listeners.get(key)?.forEach(l => l(value));
-        }
-        return true
+        this.installSetterTrap(key);
+        this.target[key] = value; // Set value again. this should call the setter trap
+        return true;
     }
 
     getPrototypeOf(target: object): object | null {
         return this.origPrototype;
     }
 
+    defineProperty(target: object, property: string | symbol, attributes: PropertyDescriptor): boolean {
+        throw new Error("Defineproperty not yet supported");
+    }
 
 }
