@@ -8,6 +8,8 @@ import {AfterWriteListener, Clazz, ObjKey} from "./common";
 import {ObjectProxyHandler} from "./globalObjectWriteTracking";
 
 
+const enhancedObjects = new WeakSet<object>();
+
 /**
  * Register them here
  */
@@ -28,8 +30,8 @@ export function getWriteTrackerClassFor(obj: object) {
     return cache_WriteTrackerClassMap.get(clazz);
 }
 
-function objectIsEnhancedWithWriteTracker(obj: object) {
-    return writeTrackerClasses.has(obj.constructor as Clazz);
+export function objectIsEnhancedWithWriteTracker(obj: object) {
+    return enhancedObjects.has(obj);
 }
 
 /**
@@ -49,4 +51,5 @@ export function enhanceWithWriteTracker(obj: object) {
         const proxy = new ObjectProxyHandler(obj).proxy;
         Object.setPrototypeOf(obj, proxy);
     }
+    enhancedObjects.add(obj);
 }
