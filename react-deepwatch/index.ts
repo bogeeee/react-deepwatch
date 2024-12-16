@@ -592,14 +592,14 @@ type WatchedOptions = {
      * TODO: Implement
      * Called, when a deep property was changed through the proxy.
      */
-    onChange: () => void
+    onChange?: () => void
 
     /**
      * TODO: Implement
      * Called on a change to one of those properties, that were read-recorded in the component function (through the proxy of course).
      * Reacts also on external changes / not done through the proxy.
      */
-    onRecordedChange: () => void
+    onRecordedChange?: () => void
 }
 
 function watched<T extends object>(obj: T, options?: WatchedOptions): T {
