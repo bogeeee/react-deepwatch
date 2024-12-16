@@ -49,6 +49,9 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
 
         let origOwnDescriptor = Object.getOwnPropertyDescriptor(target, key);
         if(origOwnDescriptor !== undefined) {
+            if(origOwnDescriptor.configurable !== true) {
+                throw new Error("Cannot delete non- 'configurable' property.");
+            }
             //@ts-ignore
             delete target[key]; // delete the old, or the following Object.defineProperty will conflict
         }

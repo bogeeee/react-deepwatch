@@ -5,6 +5,17 @@ export function throwError(e: string | Error) {
     throw new Error(e);
 }
 
+export function reThrowWithHint(e: unknown, hint: string) {
+    try {
+        if(e instanceof Error) {
+            // Add hint to error:
+            e.message+= `\n${hint}`;
+        }
+    }
+    catch (x) {
+    }
+    throw e;
+}
 
 /**
  * A Map<K, Set<V>>. But automatically add a new Set if needed

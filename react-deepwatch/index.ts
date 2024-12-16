@@ -1,8 +1,14 @@
-import {RecordedRead, recordedReadsArraysAreEqual, RecordedValueRead, WatchedGraph} from "./watchedGraph";
+import {
+    RecordedRead,
+    RecordedReadOnProxiedObject,
+    recordedReadsArraysAreEqual,
+    RecordedValueRead,
+    WatchedGraph
+} from "./watchedGraph";
 import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
-import {ProxiedGraph} from "./proxiedGraph";
+import {enhanceWithWriteTracker} from "./globalWriteTracking";
 
 export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
 
@@ -361,6 +367,18 @@ class Frame {
     }
 
     watchPropertyChange(read: RecordedRead) {
+        //Diagnosis: Provoke errors early, cause the code at the bottom of this method looses the stacktrace to the user's jsx
+        if(this.persistent.options.watchOutside !== false) {
+            try {
+                if (read instanceof RecordedReadOnProxiedObject) {
+                    enhanceWithWriteTracker(read.obj);
+                }
+            }
+            catch (e) {
+                throw new Error(`Could not enhance the original object to track reads. This can fail, if it was created with some unsupported language constructs (defining read only properties; subclassing Array, Set or Map; ...). You can switch it off via the WatchedComponentOptions#watchOutside flag. I.e: const MyComponent = watchedComponent(props => {...}, {watchOutside: false})`, {cause: e});
+            }
+        }
+
         // Re-render on a change of the read value:
         this.startPropChangeListeningFns.push(() => read.onChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */, this.persistent.options.watchOutside !== false));
         this.cleanUpPropChangeListenerFns.push(() => read.offChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */));
