@@ -319,6 +319,21 @@ describe('ProxiedGraph and direct enhancement tests', () => {
 
         });
 
+        test(`${mode.name}: Writes arrive`, ()=> {
+            const orig:any = {a: "x", counter: 0}
+            const proxy = mode.proxyOrEnhance(orig);
+            expect(proxy.a).toEqual("x");
+            proxy.b = "2"
+            expect(proxy.b).toEqual("2");
+            expect(orig.b).toEqual("2");
+            orig.c = "3"
+            expect(proxy.c).toEqual("3");
+
+            proxy.counter++;
+            proxy.counter++;
+            expect(proxy.counter).toEqual(2);
+        } )
+
     }
 });
 
@@ -451,27 +466,6 @@ describe('WatchedGraph tests', () => {
         expect(writes[0] === valueObj).toBeTruthy()
     });
 
-    test("onAfterWrite arrays", () => {
-        const origObj: string[] = [];
-        let watchedGraph = new WatchedGraph();
-        const proxy = watchedGraph.getProxyFor(origObj);
-
-        // Install listener:
-        let writes: string[] = [];
-        //@ts-ignore The proxy retrieves keys as strings or symbols
-        watchedGraph.onAfterWriteOnProperty(origObj, "0", (newValue) => writes.push(newValue));
-        let writesToLength: number[] = [];
-        watchedGraph.onAfterWriteOnProperty(origObj, "length", (newValue) => writesToLength.push(newValue  as number));
-
-        proxy.push("a");
-        proxy.push("b"); // not listening on index 1
-        proxy[0] = "a_new"; // not listening on index 1
-
-        expect(writes).toEqual(["a","a_new"]);
-        expect(writesToLength).toEqual([1,2]); // This might not work. We might need to enhance the push method
-
-    });
-
     it("should not fire onChange when value stays the same", ()=> {
         // TODO
     })
@@ -594,27 +588,33 @@ describe('WatchedGraph record read and watch it', () => {
                 });
             }
         }
+        for(const withTrackOriginal of [false, true]) {
+            test(`${name}: Recorded reads are equal, when run twice${withTrackOriginal?` with track original`:""}`, () => {
+                // readerFns reads are equal?
+                const testSetup = provideTestSetup();
+                let watchedGraph = new WatchedGraph();
+                const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                let reads: RecordedRead[] = [];
+                watchedGraph.onAfterRead(r => {
+                    reads.push(r as RecordedPropertyRead);
+                    if(withTrackOriginal) {
+                        r.onChange(() => {}, true);
+                    }
+                });
 
-        test(`${name}: Recorded reads are equals when run twice`, () => {
-            // readerFns reads are equal?
-            const testSetup = provideTestSetup();
-            let watchedGraph = new WatchedGraph();
-            const proxy = watchedGraph.getProxyFor(testSetup.origObj);
-            let reads: RecordedRead[] = [];
-            watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+                // 1st time:
+                testSetup.readerFn(proxy);
+                expect(reads.length).toBeGreaterThan(0);
+                const reads1 = reads;
 
-            // 1st time:
-            testSetup.readerFn(proxy);
-            expect(reads.length).toBeGreaterThan(0);
-            const reads1 = reads;
+                // 2nd time:
+                reads = [];
+                testSetup.readerFn(proxy);
+                const reads2 = reads;
 
-            // 2nd time:
-            reads = [];
-            testSetup.readerFn(proxy);
-            const reads2 = reads;
-
-            expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
-        })
+                expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
+            })
+        }
     }
 
 
@@ -629,11 +629,32 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    testRecordReadAndWatch("Set deep property", () => {
+        const obj: {someDeep: {someProp?: string}} = {someDeep: {}};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(obj.someDeep.someProp)},
+            writerFn: (obj) => {obj.someDeep.someProp = "123"},
+            falseReadsFn: (obj) => {read((obj as any).someOtherDeep);read((obj as any).someDeep.someOtherProp)}, // TODO
+            falseWritesFn: (obj) => {(obj as any).someOtherDeep = "345"; obj.someDeep.someProp="123" /* again */}
+        }
+    });
+
     testRecordReadAndWatch<string[]>("Read values of an array", () => {
         const obj: {} = {};
         return {
             origObj: ["a", "b", "c"],
             readerFn: (obj) => {read([...obj])},
+            writerFn: (obj) => {obj.push("d")},
+            falseWritesFn: (obj) => {obj[1] = "b"}
+        }
+    });
+
+    testRecordReadAndWatch<string[]>("Read array.length", () => {
+        const obj: {} = {};
+        return {
+            origObj: ["a", "b", "c"],
+            readerFn: (obj) => {read(obj.length)},
             writerFn: (obj) => {obj.push("d")},
             falseWritesFn: (obj) => {obj[1] = "b"}
         }
