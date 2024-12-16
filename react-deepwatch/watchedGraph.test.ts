@@ -171,11 +171,11 @@ describe('ProxiedGraph tests', () => {
 
 describe('ProxiedGraph and direct enhancement tests', () => {
     for (const mode of [{
-        name: "ProxiedGraph", proxyOrEnhance(o: obj) {
+        name: "ProxiedGraph", proxyOrEnhance<T extends object>(o: T) {
             return new WatchedGraph().getProxyFor(o)
         }
     }, {
-        name: "Direct enhancement", proxyOrEnhance(o: obj) {
+        name: "Direct enhancement", proxyOrEnhance<T extends object>(o: T) {
             enhanceWithWriteTracker(o);
             return o;
         }
@@ -638,6 +638,8 @@ describe('WatchedGraph record read and watch it', () => {
             falseWritesFn: (obj) => {obj[1] = "b"}
         }
     });
+
+    // TODO: non enumerable properties
 
     /* Template:
     testRecordReadAndWatch("xxx", () => {
