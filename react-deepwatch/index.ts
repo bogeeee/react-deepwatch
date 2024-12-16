@@ -13,6 +13,9 @@ import {enhanceWithWriteTracker} from "./globalWriteTracking";
 export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
 
 let watchedGraph: WatchedGraph | undefined
+function getWatchedGraph() {
+    return watchedGraph || (watchedGraph = new WatchedGraph()); // Lazy initialize global variable
+}
 
 let debug_idGenerator=0;
 
@@ -206,12 +209,19 @@ class RecordedLoadCall {
 class WatchedComponentPersistent {
     options: WatchedComponentOptions;
 
+    /**
+     * props of the component. These are saved here in the state (in a non changing object instance), so code inside load call can watch **shallow** props changes on it.
+     */
+    watchedProps = getWatchedGraph().getProxyFor({});
+
     loadCalls: RecordedLoadCall[] = [];
 
     currentFrame?: Frame
 
     /**
-     * RenderRun: A passive render is requested. Save reference to the render run a safety check
+     * - true = rerender requested (will re-render asap) or just starting the render and changes in props/state/watched still make it into it.
+     * - false = ...
+     * - RenderRun = A passive render is requested. Save reference to the render run as safety check
      */
     reRenderRequested: boolean | RenderRun = false;
 
@@ -282,6 +292,24 @@ class WatchedComponentPersistent {
     constructor(options: WatchedComponentOptions) {
         this.options = options;
     }
+
+    /**
+     *
+     * @param props
+     */
+    applyNewProps(props: object) {
+        // Set / add new props:
+        for(const key in props) {
+            //@ts-ignore
+            this.watchedProps[key] = props[key];
+        }
+
+        // Set non-existing to undefined:
+        for(const key in this.watchedProps) {
+            //@ts-ignore
+            this.watchedProps[key] = props[key];
+        }
+    }
 }
 
 /**
@@ -319,7 +347,7 @@ class Frame {
     //watchedGraph= new WatchedGraph();
     get watchedGraph() {
         // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
-        return watchedGraph || (watchedGraph = new WatchedGraph()); // Lazy initialize global variable
+        return getWatchedGraph();
     }
 
     constructor() {
@@ -457,12 +485,18 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [persistent] = useState(new WatchedComponentPersistent(options));
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
 
-        // Call listeners (again) because may be the render was not "requested" through code in this package but happened some other way:
+        const isPassive = persistent.nextReRenderMightBePassive()
+
+        // Apply the new props (may trigger change listeners and therefore requestReRender() )
+        persistent.reRenderRequested = true; // this prevents new re-renders
+        persistent.requestReRender(); // Test, that this does not cause an infinite loop. (line can be removed when running stable)
+        persistent.applyNewProps(props);
+
+        persistent.reRenderRequested = false;
+
+        // Call remaining listeners, because may be the render was not "requested" through code in this package but happened some other way:
         persistent.onceOnReRenderListeners.forEach(fn => fn());
         persistent.onceOnReRenderListeners = [];
-
-        const isPassive = persistent.nextReRenderMightBePassive()
-        persistent.reRenderRequested = false;
         
         // Create frame:
         let frame = isPassive && persistent.currentFrame !== undefined ? persistent.currentFrame : new Frame();
@@ -491,8 +525,6 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
 
         try {
-            const watchedProps = createProxyForProps(frame.watchedGraph, props);
-
             // Install read listener:
             let readListener = (read: RecordedRead)  => {
                 if(!renderRun.isPassive) { // Active run ?
@@ -505,7 +537,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
             try {
                 try {
-                    return componentFn(watchedProps); // Run the user's component function
+                    return componentFn(persistent.watchedProps as PROPS); // Run the user's component function
                 }
                 finally {
                     renderRun.onFinallyAfterUsersComponentFnListeners.forEach(l => l()); // Call listeners
@@ -990,26 +1022,6 @@ function probe<T>(probeFn: () => T, defaultResult: T) {
     return defaultResult;
 }
 
-
-/**
- * graph.createProxyFor(props) errors when props's readonly properties are accessed.
- * So instead, this functions does not proxy the **whole** props but each prop individually
- * @param graph
- * @param props
- */
-function createProxyForProps<P extends object>(graph: WatchedGraph, props: P): P {
-    // TODO: see ShouldReLoadIfPropsPropertyChanges.
-    const result = {}
-    Object.keys(props).forEach(key => {
-        //@ts-ignore
-        const value = props[key];
-        Object.defineProperty(result, key,  {
-            value: (value!= null && typeof value === "object")?graph.getProxyFor(value):value,
-            writable: false
-        })
-    })
-    return result as P;
-}
 
 export function debug_tagComponent(name: string) {
     currentRenderRun!.frame.persistent.debug_tag = name;
