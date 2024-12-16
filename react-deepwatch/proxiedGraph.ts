@@ -1,7 +1,7 @@
 /**
  *
  */
-import {getPropertyDescriptor, ObjKey} from "./common";
+import {getPropertyDescriptor, GetterFlags, ObjKey, SetterFlags} from "./common";
 
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
@@ -72,7 +72,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
     get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
         const getter = getPropertyDescriptor(this.target, p)?.get;
         let value;
-        if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined) { // Access via property accessor ?
+        if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined && (getter as GetterFlags).origHadGetter !== false) { // Access via real property accessor ?
             return value = getter.apply(this.proxy,[]); // Call the accessor with a proxied this
         }
         else {
@@ -84,11 +84,9 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
             const descriptor = Object.getOwnPropertyDescriptor(this.target, p);
 
             // Handle read-only property:
-            if(descriptor !== undefined && !descriptor.writable) {
+            if(descriptor !== undefined && descriptor.writable === false) {
                 // The js runtime would prevent us from returning a proxy :( Pretty mean :(
                 throw new Error("Cannot proxy a read-only property. This is not implemented."); // TODO: Implement the virtual way (see constructor)
-                //Try to crack up the target:
-                //Object.defineProperty(this.target, p, {...descriptor, writable: true}); // Redefine property: Does not work
             }
 
             return this.graph.getProxyFor(value);
@@ -104,7 +102,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
 
     set(fake_target:object, p:string | symbol, value:any, receiver:any) {
         const setter = getPropertyDescriptor(this.target, p)?.set;
-        if(this.graph.propertyAccessorsAsWhiteBox && setter !== undefined) { // Setting via property access ?
+        if(this.graph.propertyAccessorsAsWhiteBox && setter !== undefined && (setter as SetterFlags).origHadSetter !== false) { // Setting via real property accessor ?
             setter.apply(this.proxy,[value]); // Only call the accessor with a proxied this
         }
         else {

@@ -32,3 +32,10 @@ export function getPropertyDescriptor(o: object, p: PropertyKey):  PropertyDescr
         return getPropertyDescriptor(proto, p);
     }
 }
+
+export type GetterFlags = {
+    origHadGetter?: boolean
+}
+export type SetterFlags = {
+    origHadSetter?: boolean
+}

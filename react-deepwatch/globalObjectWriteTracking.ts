@@ -2,11 +2,11 @@
  * Listeners for one object
  */
 import {MapSet} from "./Util";
-import {AfterWriteListener, getPropertyDescriptor, ObjKey} from "./common";
+import {AfterWriteListener, getPropertyDescriptor, GetterFlags, ObjKey, SetterFlags} from "./common";
 
 class ObjectWriteListeners {
     /**
-     * For writes (also if these are the same/unchanged values) on setters
+     * For writes on **setters** (also if these are the same/unchanged values)
      */
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
@@ -53,35 +53,42 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             delete target[key]; // delete the old, or the following Object.defineProperty will conflict
         }
 
-        Object.defineProperty( target, key, {
-            set(newValue: any) {
-                const writeListenersForTarget = writeListenersForObject.get(target);
+        const newSetter=  (newValue: any) => {
+            const writeListenersForTarget = writeListenersForObject.get(target);
 
-                if(origSetter !== undefined) {
-                    origSetter.apply(target, [newValue]);  // call the setter
-                    writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
-                    return;
-                }
+            if(origSetter !== undefined) {
+                origSetter.apply(target, [newValue]);  // call the setter
+                writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                return;
+            }
 
-                if(origGetter !== undefined) {
-                    currentValue = origGetter.apply(target);  // call the getter. Is this a good idea to refresh the value here?
-                    throw new TypeError("Target originally had a getter and no setter but the property is set.");
-                }
+            if(origGetter !== undefined) {
+                currentValue = origGetter.apply(target);  // call the getter. Is this a good idea to refresh the value here?
+                throw new TypeError("Target originally had a getter and no setter but the property is set.");
+            }
 
+            //@ts-ignore
+            if (newValue !== currentValue) { // modify ?
                 //@ts-ignore
-                if (newValue !== currentValue) { // modify ?
-                    //@ts-ignore
-                    currentValue = newValue;
-                    writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
-                }
-            },
-            get() {
-                if(origGetter !== undefined) {
-                    currentValue = origGetter.apply(target);  // call the getter
-                }
-                return currentValue;
-            },
-            enumerable: origOwnDescriptor !== undefined?origOwnDescriptor?.enumerable:true
+                currentValue = newValue;
+                writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+            }
+        }
+        (newSetter as SetterFlags).origHadSetter = origSetter !== undefined;
+
+        const newGetter = () => {
+            if(origGetter !== undefined) {
+                currentValue = origGetter.apply(target);  // call the getter
+            }
+            return currentValue;
+        }
+        (newGetter as GetterFlags).origHadGetter = origGetter !== undefined;
+
+        Object.defineProperty( target, key, { // TODO: [Performance optimization tipps, see js example](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty#description)
+            set: newSetter,
+            get: newGetter,
+            enumerable: origOwnDescriptor !== undefined?origOwnDescriptor?.enumerable:true,
+            configurable: false,
         })
     }
 
