@@ -12,11 +12,11 @@ class ObjectWriteListeners {
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
 }
 
-export const writeListenersForObect = new WeakMap<object, ObjectWriteListeners>();
+export const writeListenersForObject = new WeakMap<object, ObjectWriteListeners>();
 export function getWriteListenersForObject(obj: object) {
-    let result = writeListenersForObect.get(obj);
+    let result = writeListenersForObject.get(obj);
     if(result === undefined) {
-        writeListenersForObect.set(obj, result = new ObjectWriteListeners());
+        writeListenersForObject.set(obj, result = new ObjectWriteListeners());
     }
     return result;
 }
@@ -42,37 +42,51 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
     installSetterTrap(key: ObjKey) {
         let target = this.target;
         let origDescriptor = getPropertyDescriptor(target, key);
+        //@ts-ignore
         let currentValue = origDescriptor?.value /* performance */ || target[key];
         const origSetter = origDescriptor?.set;
         const origGetter = origDescriptor?.get;
+
+        let origOwnDescriptor = Object.getOwnPropertyDescriptor(target, key);
+        if(origOwnDescriptor !== undefined) {
+            //@ts-ignore
+            delete target[key]; // delete the old, or the following Object.defineProperty will conflict
+        }
+
         Object.defineProperty( target, key, {
             set(newValue: any) {
-                const writeListenersForTarget = getWriteListenersForObject(target);
+                const writeListenersForTarget = writeListenersForObject.get(target);
 
                 if(origSetter !== undefined) {
                     origSetter.apply(target, [newValue]);  // call the setter
-                    writeListenersForTarget.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                    writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
                     return;
+                }
+
+                if(origGetter !== undefined) {
+                    currentValue = origGetter.apply(target);  // call the getter. Is this a good idea to refresh the value here?
+                    throw new TypeError("Target originally had a getter and no setter but the property is set.");
                 }
 
                 //@ts-ignore
                 if (newValue !== currentValue) { // modify ?
                     //@ts-ignore
                     currentValue = newValue;
-                    writeListenersForTarget.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                    writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
                 }
             },
             get() {
                 if(origGetter !== undefined) {
-                    return origGetter.apply(target);  // call the getter
+                    currentValue = origGetter.apply(target);  // call the getter
                 }
                 return currentValue;
-            }
+            },
+            enumerable: origOwnDescriptor !== undefined?origOwnDescriptor?.enumerable:true
         })
     }
 
     get(fake_target:object, key: ObjKey, receiver:any): any {
-        // Instead, do, what js would do internally:
+        // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the actual tinkered prototype chain which has this proxy in there and calls get (endless recursion)
         const propDesc = getPropertyDescriptor(this.target, key)
         if (propDesc !== undefined) {
             let getter = propDesc.get;
@@ -87,6 +101,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         // if this method got called, there is no setter trap installed yet
 
         this.installSetterTrap(key);
+        //@ts-ignore
         this.target[key] = value; // Set value again. this should call the setter trap
         return true;
     }
