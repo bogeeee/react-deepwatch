@@ -1,8 +1,13 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
 import {arraysAreEqualsByPredicateFn, MapSet} from "./Util";
-import {enhanceWithWriteTracker, getWriteTrackerClassFor} from "./globalWriteTracking";
+import {
+    enhanceWithWriteTracker,
+    getWriteTrackerClassFor,
+    objectIsEnhancedWithWriteTracker
+} from "./globalWriteTracking";
 import {getWriteListenersForArray, WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterReadListener, AfterWriteListener, Clazz, DualUseTracker, ObjKey} from "./common";
+import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
 
 
 export abstract class RecordedRead {
@@ -80,14 +85,12 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         if(trackOriginal) {
             enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the propery of interest. See ObjectProxyHandler#installSetterTrap
         }
-        
-        this.proxyHandler.afterWriteOnPropertyListeners.add(this.key, listener);
+        getWriteListenersForObject(this.obj).afterChangeProperty_listeners.add(this.key, listener);
         debug_numberOfPropertyChangeListeners++;
-        
     }
 
     offChange(listener: (newValue: unknown) => void) {
-        this.proxyHandler.afterWriteOnPropertyListeners.delete(this.key, listener);
+        writeListenersForObject.get(this.obj)?.afterChangeProperty_listeners.delete(this.key, listener);
         debug_numberOfPropertyChangeListeners--;
     }
 
@@ -254,6 +257,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
 
     /**
      * Watches for writes on a specified property
+     * @deprecated Watching is global and not bound to this WatchedGraph
      * @param obj
      * @param key Not restricted here (for the tests), but it must not be number !
      * @param listener
@@ -263,13 +267,14 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
             throw new Error("TODO");
         }
         else {
-            this.getHandlerFor(obj).afterWriteOnPropertyListeners.add(key as ObjKey, listener);
+            getWriteListenersForObject(obj).afterChangeProperty_listeners.add(key as ObjKey, listener);
         }
 
     }
 
     /**
      * Watches for writes on a specified property
+     * @deprecated Watching is global and not bound to this WatchedGraph
      * @param obj
      * @param key Not restricted here (for the tests), but it must not be number !
      * @param listener
@@ -279,7 +284,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
             throw new Error("TODO");
         }
         else {
-            this.getHandlerFor(obj).afterWriteOnPropertyListeners.delete(key as ObjKey, listener);
+            writeListenersForObject.get(obj)?.afterChangeProperty_listeners.add(key as ObjKey, listener);
         }
     }
 
@@ -358,10 +363,6 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
      */
     supervisorClasses: {watcher: Clazz, writeTracker: Clazz} | undefined
 
-    /**
-     * For plain objects
-     */
-    afterWriteOnPropertyListeners = new MapSet<ObjKey, AfterWriteListener>();
 
     constructor(target: object, graph: WatchedGraph) {
         super(target, graph);
@@ -419,7 +420,9 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
 
     protected rawWrite(key: string | symbol, newValue: any) {
         super.rawWrite(key, newValue);
-        this.afterWriteOnPropertyListeners.get(key)?.forEach(l => l(newValue));
+        if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
+            writeListenersForObject.get(this.target)?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners;
+        }
     }
 }
 
