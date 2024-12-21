@@ -56,5 +56,10 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
         return this;
     }
 
-
+    /**
+     * Pretend that this is an array
+     */
+    get ["constructor"]() {
+        return Array;
+    }
 }

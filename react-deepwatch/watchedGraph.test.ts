@@ -334,6 +334,26 @@ describe('ProxiedGraph and direct enhancement tests', () => {
             expect(proxy.counter).toEqual(2);
         } )
 
+        /*
+        // Not possible with enhancement
+        test(`${mode.name}: Prototype should be the same`, () => {
+            const orig:any = {a: "x", counter: 0}
+            const protoOrig = Object.getPrototypeOf(orig);
+            const proxy = mode.proxyOrEnhance(orig);
+            expect(protoOrig === Object.getPrototypeOf(proxy)).toBeTruthy();
+
+        });
+        */
+        test(`${mode.name}: Constructor should be the same`, () => {
+            for(const obj of [{}, new Set, new Map, []]) {
+                const orig: object = obj
+                const constructorOrig = obj.constructor;
+                const proxy = mode.proxyOrEnhance(orig);
+                expect(constructorOrig === proxy.constructor).toBeTruthy();
+            }
+
+        });
+
     }
 });
 
@@ -661,6 +681,9 @@ describe('WatchedGraph record read and watch it', () => {
     });
 
     // TODO: non enumerable properties
+
+    // TODO: delete on arrays
+    // TODO: arrays with gaps
 
     /* Template:
     testRecordReadAndWatch("xxx", () => {

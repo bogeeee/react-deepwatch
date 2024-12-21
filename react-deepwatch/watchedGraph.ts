@@ -321,6 +321,13 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
         this._watchedGraphHandler?.fireAfterRead(recordedArrayValuesRead);
     }
 
+    /**
+     * Pretend that this is an array
+     */
+    get ["constructor"]() {
+        return Array;
+    }
+
     values(): ArrayIterator<T> {
         try {
             return this._target.values();
