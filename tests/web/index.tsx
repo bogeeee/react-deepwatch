@@ -159,11 +159,11 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
             <b>{item.name}</b>&#160;
             Retrieve item.counter's dependant: {load(
                 delayed(() => {
-                    if(item.name === "item3") { return `counter: ${item.counter} (no fetch stats. polling should not re-render)`}
-                    return `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`
+                    if(item.name === "item3") { return {msg: `counter: ${item.counter} (no fetch stats. polling should not re-render)`}}
+                    return {msg: `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`}
                 }, 500),
-            {name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: "fallback", critical: state.critical}:{})}
-        )}
+            {name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: {msg:"fallback"}, critical: state.critical}:{})}
+        ).msg}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
             &#160;<input type="checkbox" checked={item.poll} onChange={(event) => {item.poll = event.target.checked}} />poll
         </div>)}

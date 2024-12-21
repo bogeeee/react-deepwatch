@@ -9,6 +9,7 @@ import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {enhanceWithWriteTracker} from "./globalWriteTracking";
+import {_preserve, preserve, PreserveOptions} from "./preserve";
 
 export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
 
@@ -48,11 +49,18 @@ type WatchedComponentOptions = {
     watchOutside?: boolean
 
     /**
-     * TODO
-     * Enable this i.e., if you have logic like <code>if(row === state.selectedRow)</code>
-     * <p>Default: false</p>
+     * TODO: implement
+     * Preserves object instances in props by running the {@link preserve} function over the props (where the last value is memoized).
+     * <p>
+     * It's not recommended to enable this. Use only as a workaround when working with non-watched components where you have no control over. Better run {@link preserve} on the fetched source and keep a consistent-instance model in your app in the first place.
+     * </p>
+     *
+     * Note: Even with false, the `props` root object still keeps its instance (so it's save to watch `props.myFirstLevelProperty`).
+     * <p>
+     *     Default: false
+     * </p>
      */
-    checkInstanceEqualityForLoads?: boolean
+    preserveProps?: boolean
 }
 
 class RecordedLoadCall {
@@ -65,7 +73,7 @@ class RecordedLoadCall {
     /**
      * Reference saved only for polling
      */
-    loaderFn?: () => Promise<unknown>;
+    loaderFn?: (oldResult?: unknown) => Promise<unknown>;
 
     options!: LoadOptions & Partial<PollOptions>;
 
@@ -90,6 +98,8 @@ class RecordedLoadCall {
      */
     cache_index: number;
 
+    diagnosis_callstack?: Error
+
     get isObsolete() {
         return !(this.watchedComponentPersistent.loadCalls.length > this.cache_index && this.watchedComponentPersistent.loadCalls[this.cache_index] === this); // this.watchedComponentPersistent.loadCalls does not contain this?
     }
@@ -102,7 +112,13 @@ class RecordedLoadCall {
     async exec() {
         try {
             if(this.options.fixedInterval !== false) this.lastExecTime = new Date(); // Take timestamp
-            return await this.loaderFn!()
+            const lastResult = this.result?.state === "resolved"?this.result.resolvedValue:undefined;
+            let result = await this.loaderFn!(lastResult);
+            if(lastResult !== undefined && this.options.preserve !== false) { // Preserve enabled?
+                const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
+                result = _preserve(lastResult,result, preserveOptions, {callStack: this.diagnosis_callstack});
+            }
+            return result
         }
         finally {
             if(this.options.fixedInterval === false) this.lastExecTime = new Date(); // Take timestamp
@@ -195,11 +211,12 @@ class RecordedLoadCall {
     }
 
 
-    constructor(watchedComponentPersistent: WatchedComponentPersistent, loaderFn: (() => Promise<unknown>) | undefined, options: LoadOptions & Partial<PollOptions>, cache_index: number) {
+    constructor(watchedComponentPersistent: WatchedComponentPersistent, loaderFn: (() => Promise<unknown>) | undefined, options: LoadOptions & Partial<PollOptions>, cache_index: number, diagnosis_callStack: Error | undefined) {
         this.watchedComponentPersistent = watchedComponentPersistent;
         this.loaderFn = loaderFn;
         this.options = options;
         this.cache_index = cache_index;
+        this.diagnosis_callstack = diagnosis_callStack;
     }
 }
 
@@ -664,6 +681,12 @@ type LoadOptions = {
      * {@link isLoading} Can filter for only the load(...) statements with this given name.
      */
     name?: string
+
+    /**
+     *
+     * <p>Default: true</p>
+     */
+    preserve?: boolean | PreserveOptions
 }
 type PollOptions = {
     /**
@@ -690,7 +713,7 @@ type PollOptions = {
  * @param loaderFn
  * @param options
  */
-export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<LoadOptions, "fallback">): T
+export function load<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, options?: Omit<LoadOptions, "fallback">): T
 /**
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
@@ -700,7 +723,7 @@ export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options?: Omit<Load
  * @param loaderFn
  * @param options
  */
-export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
+export function load<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
 /**
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
@@ -710,7 +733,9 @@ export function load<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
  * @param loaderFn
  * @param options
  */
-export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Partial<PollOptions> = {}): any {
+export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, options: LoadOptions & Partial<PollOptions> = {}): any {
+    const diagnosis_callStack = options.preserve !== false?new Error("load(...) was called"):undefined // Look one level up, where you called load(...)
+
     // Wording:
     // - "previous" means: load(...) statements more upwards in the user's code
     // - "last" means: this load call but from a past frame
@@ -840,7 +865,7 @@ export function load(loaderFn: () => Promise<unknown>, options: LoadOptions & Pa
 
             // *** make a loadCall / exec loaderFn ***:
 
-            let loadCall = new RecordedLoadCall(persistent, loaderFn, options, renderRun.loadCallIndex);
+            let loadCall = new RecordedLoadCall(persistent, loaderFn, options, renderRun.loadCallIndex, diagnosis_callStack);
             loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loadCall.exec()); // Exec loaderFn
             loadCall.loaderFn = options.interval?loadCall.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
@@ -959,7 +984,7 @@ export function loadFailed(nameFilter?: string): unknown {
  * @param loaderFn
  * @param options
  */
-export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: Omit<LoadOptions, "fallback"> & PollOptions): T
+export function poll<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, options: Omit<LoadOptions, "fallback"> & PollOptions): T
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
@@ -977,7 +1002,7 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: Omit<LoadO
  * @param loaderFn
  * @param options
  */
-export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOptions & {fallback: FALLBACK} & PollOptions): T | FALLBACK
+export function poll<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, options: LoadOptions & {fallback: FALLBACK} & PollOptions): T | FALLBACK
 /**
  * Like {@link load}, but re-runs loaderFn regularly at the interval, specified in the options.
  * <p>
@@ -995,7 +1020,7 @@ export function poll<T,FALLBACK>(loaderFn: () => Promise<T>, options: LoadOption
  * @param loaderFn
  * @param options
  */
-export function poll(loaderFn: () => Promise<unknown>, options: LoadOptions & PollOptions): any {
+export function poll(loaderFn: (oldResult?: unknown) => Promise<unknown>, options: LoadOptions & PollOptions): any {
     return load(loaderFn, options);
 }
 

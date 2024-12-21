@@ -129,3 +129,46 @@ function getProxyHandler(proxy: object) {
     return proxyToProxyHandler.get(proxy);
 }
 
+/**
+ * Makes the obj throw an error when trying to access it
+ * @param obj
+ * @param message
+ * @param cause
+ */
+export function invalidateObject(obj: object, message: string, cause?: Error) {
+    const throwInvalid = () => {
+        throw new Error(message, {cause: cause});
+    }
+
+    // Delete all writeable  own props:
+    const descrs = Object.getOwnPropertyDescriptors(obj);
+    for(const k in descrs) {
+        const desc = descrs[k];
+        if(desc.configurable) {
+            //@ts-ignore
+            delete obj[k];
+        }
+    }
+
+    Object.setPrototypeOf(obj, new Proxy(obj, {
+        get(target: object, p: string | symbol, receiver: any): any {
+            throwInvalid();
+        },
+        set(target: object, p: string | symbol, newValue: any, receiver: any): boolean {
+            throwInvalid()
+            return false;
+        },
+        defineProperty(target: object, property: string | symbol, attributes: PropertyDescriptor): boolean {
+            throwInvalid();
+            return false;
+        },
+        deleteProperty(target: object, p: string | symbol): boolean {
+            throwInvalid()
+            return false;
+        },
+        ownKeys(target: object): ArrayLike<string | symbol> {
+            throwInvalid()
+            return [];
+        }
+    }))
+}
