@@ -91,7 +91,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             set: newSetter,
             get: newGetter,
             enumerable: origOwnDescriptor !== undefined?origOwnDescriptor?.enumerable:true,
-            configurable: false,
+            configurable: true, // Allow to delete the property
         })
     }
 
