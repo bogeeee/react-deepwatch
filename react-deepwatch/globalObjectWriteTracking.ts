@@ -96,6 +96,11 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
     }
 
     get(fake_target:object, key: ObjKey, receiver:any): any {
+        // Validity check
+        if(receiver !== this.target) {
+            throw new Error("Invalid state. Get was called on a different object than this write-tracker-proxy (which is set as the prototype) is for. Did you clone the object, resulting in shared prototypes?")
+        }
+
         // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the actual tinkered prototype chain which has this proxy in there and calls get (endless recursion)
         const propDesc = getPropertyDescriptor(this.target, key)
         if (propDesc !== undefined) {
@@ -108,6 +113,11 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
     }
 
     set(fake_target:object, key: ObjKey, value:any, receiver:any) {
+        // Validity check
+        if(receiver !== this.target) {
+            throw new Error("Invalid state. Set was called on a different object than this write-tracker-proxy (which is set as the prototype) is for. Did you clone the object, resulting in shared prototypes?")
+        }
+
         // if this method got called, there is no setter trap installed yet
 
         this.installSetterTrap(key);

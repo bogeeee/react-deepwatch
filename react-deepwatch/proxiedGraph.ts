@@ -69,7 +69,12 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         throw new Error("Must not use defineProperty on a proxied object. Handling of change tracking etc. for this may not be implemented");
     }
 
-    get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
+    get (fake_target:object, p:string | symbol, receiver:any) {
+        // Validity check
+        if(receiver !== this.proxy) {
+            throw new Error("Invalid state. Get was called on a different object than this proxy  is for."); // Cannot imagine a legal case
+        }
+
         const getter = getPropertyDescriptor(this.target, p)?.get;
         let value;
         if(this.graph.propertyAccessorsAsWhiteBox && getter !== undefined && (getter as GetterFlags).origHadGetter !== false) { // Access via real property accessor ?
@@ -101,6 +106,11 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
     }
 
     set(fake_target:object, p:string | symbol, value:any, receiver:any) {
+        // Validity check
+        if(receiver !== this.proxy) {
+            throw new Error("Invalid state. Set was called on a different object than this proxy  is for."); // Cannot imagine a legal case
+        }
+
         const setter = getPropertyDescriptor(this.target, p)?.set;
         if(this.graph.propertyAccessorsAsWhiteBox && setter !== undefined && (setter as SetterFlags).origHadSetter !== false) { // Setting via real property accessor ?
             setter.apply(this.proxy,[value]); // Only call the accessor with a proxied this
