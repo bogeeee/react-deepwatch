@@ -65,7 +65,11 @@ type WatchedComponentOptions = {
 
 class RecordedLoadCall {
     debug_id = ++debug_idGenerator;
+
+    loadCall: LoadCall
+
     /**
+     * TODO: move to loadCall
      * Back reference to it
      */
     watchedComponentPersistent: WatchedComponentPersistent;
@@ -75,6 +79,9 @@ class RecordedLoadCall {
      */
     loaderFn?: (oldResult?: unknown) => Promise<unknown>;
 
+    /**
+     * TODO: move to loadCall
+     */
     options!: LoadOptions & Partial<PollOptions>;
 
     /**
@@ -112,7 +119,7 @@ class RecordedLoadCall {
     async exec() {
         try {
             if(this.options.fixedInterval !== false) this.lastExecTime = new Date(); // Take timestamp
-            const lastResult = this.result?.state === "resolved"?this.result.resolvedValue:undefined;
+            const lastResult = this.loadCall.lastResult;
             let result = await this.loaderFn!(lastResult);
             if(lastResult !== undefined && this.options.preserve !== false) { // Preserve enabled?
                 const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
@@ -218,6 +225,21 @@ class RecordedLoadCall {
         this.cache_index = cache_index;
         this.diagnosis_callstack = diagnosis_callStack;
     }
+}
+
+/**
+ * Uniquely identifies a call, to remember the lastResult to preserve object instances
+ */
+class LoadCall {
+    /**
+     * Unique id. (Source can be determined through the call stack), or, if run in a loop, it must be specified by the user
+     */
+    id: string | number | object;
+
+    /**
+     * Fore preserving
+     */
+    lastResult: unknown
 }
 
 /**
