@@ -26,7 +26,7 @@ function preserveAndCheckEquality<T>(oldObj: unknown, newObj: T): T {
 
     const preserved = preserve(oldObj, newObj);
     expectSameInstance(oldObj, preserved);
-    expect(preserved).toStrictEqual(expectedResultStructure);
+    expect(_.isEqual(preserved, expectedResultStructure)).toBeTruthy(); // Note: use underscore instead of vitest here, because vitest's comparer method somehow fails with enhanced objects
     return preserved as T;
 }
 
@@ -64,13 +64,13 @@ describe('Preserve', () => {
         test(`${mode.name}: Take over props`, () => {
             const old = mode.proxyOrEnhance({a: 1, b: "str"});
             const preserved = preserveAndCheckEquality(old, {a: 2, b: "str", c: 3});
-            expect(preserved).toEqual({a: 2, b: "str", c: 3});
+            expect(_.isEqual(preserved, {a: 2, b: "str", c: 3})).toBeTruthy();
         })
 
         test(`${mode.name}: old props should be deleted`, () => {
             const old = mode.proxyOrEnhance({a: 1, b: "old"});
             const preserved = preserveAndCheckEquality(old, {a: 2, c: 3});
-            expect(preserved).toEqual({a: 2, c: 3});
+            expect(_.isEqual(preserved, {a: 2, c: 3})).toBeTruthy();
         })
 
         test(`${mode.name}: child objects`, () => {
