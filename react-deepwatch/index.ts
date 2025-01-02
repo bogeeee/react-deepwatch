@@ -182,14 +182,14 @@ class RecordedLoadCall {
     async executeRePoll() {
         try {
             const value = await this.exec();
-            const isUnchangedPrimitiveValue = this.result.state === "resolved" && (value === null || (!(typeof value === "object"))) && value === this.result.resolvedValue;
+            const isUnchanged = this.result.state === "resolved" && value === this.result.resolvedValue;
             this.result = {state: "resolved", resolvedValue:value}
 
             if(this.isObsolete) {
                 return;
             }
 
-            if (isUnchangedPrimitiveValue) {
+            if (isUnchanged) {
                 // Loaded value did not change / No re-render needed because the fallback is already displayed
             } else {
                 this.watchedComponentPersistent.handleChangeEvent();
