@@ -139,6 +139,7 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
         withIsLoadingIndicator: false,
         returnOnIsLoading: false,
         critical: true,
+        silent: false,
         globalCounter:0,
         items: [{name: "item1", counter:0, poll:false},{name: "item2", counter:0, poll: false},{name: "item3", counter:0, poll:false},{name: "item4", counter:0, poll:false}]
     });
@@ -162,7 +163,7 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
                     if(item.name === "item3") { return {msg: `counter: ${item.counter} (no fetch stats. polling should not re-render)`}}
                     return {msg: `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`}
                 }, 500),
-            {key: item.name, name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: {msg:"fallback"}, critical: state.critical}:{})}
+            {key: item.name, name: item.name, interval: item.poll?1000:undefined, silent: state.silent, ...(state.withFallbacks?{fallback: {msg:"fallback"}, critical: state.critical}:{})}
         ).msg}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
             &#160;<input type="checkbox" checked={item.poll} onChange={(event) => {item.poll = event.target.checked}} />poll
@@ -174,6 +175,8 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
             state.withIsLoadingIndicator = event.target.checked}} />with isLoading() indicator
         <input type="checkbox" disabled={!state.withIsLoadingIndicator} checked={state.returnOnIsLoading} onChange={(event) => {
         state.returnOnIsLoading = event.target.checked}} />return on isLoading()
+        <input type="checkbox" checked={state.silent} onChange={(event) => {
+            state.silent = event.target.checked}} />silent
         <input type="checkbox" checked={state.critical} onChange={(event) => {
             state.critical = event.target.checked}} />critical
 

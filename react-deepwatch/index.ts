@@ -120,12 +120,20 @@ class LoadRun {
             let result = await this.loaderFn!(lastResult);
             if(this.options.preserve !== false) { // Preserve enabled?
                 if(result !== null && typeof result === "object") { // Result is mergeable ?
-                    this.loadCall.isUniquelyIdentified() || throwError(new Error(`Please specify a key via load(..., { key=<your key> }), so the result's object identity can be preserved. See LoadOptions#key and LoadOptions#preserve. Look at the cause to see where load(...) was called`, {cause: this.loadCall.diagnosis_callstack}));
+                    this.loadCall.isUniquelyIdentified() || throwError(new Error(`Please specify a key via load(..., { key:<your key> }), so the result's object identity can be preserved. See LoadOptions#key and LoadOptions#preserve. Look at the cause to see where load(...) was called`, {cause: this.loadCall.diagnosis_callstack}));
                     const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
                     result = _preserve(lastResult,result, preserveOptions, {callStack: this.loadCall.diagnosis_callstack});
-                    this.loadCall.lastResult = result;
                 }
             }
+
+            // Save lastresult:
+            if(this.options.preserve !== false || this.options.silent) { // last result will be needed later?
+                this.loadCall.lastResult = result; // save for later
+            }
+            else {
+                // Be memory friendly and don't leak references.
+            }
+
             return result
         }
         finally {
@@ -274,6 +282,22 @@ class LoadCall {
             throw new Error("Illegal state: A different load call for this id was registered.");
         }
         return true;
+    }
+
+    /**
+     * Value from the {@link LoadOptions#fallback} or through the {@link LoadOptions#silent} mechanism.
+     * Undefined, when no such "fallback" is available
+     */
+    getFallbackValue(): {value: unknown} | undefined {
+        !(this.options.silent && !this.isUniquelyIdentified()) || throwError(`Please specify a key via load(..., { key:<your key> }), to allow LoadOptions#silent to re-identify the last result. See LoadOptions#key and LoadOptions#silent.`); // Validity check
+
+        if(this.options.silent && this.lastResult !== undefined) {
+            return {value: this.lastResult}
+        }
+        else if(this.options.hasOwnProperty("fallback")) {
+            return {value: this.options.fallback};
+        }
+        return undefined;
     }
 }
 
@@ -752,6 +776,13 @@ type LoadOptions = {
     fallback?: unknown
 
     /**
+     * Performance: Will return the old value from a previous load, while this is still loading. This causes less disturbance (i.e. triggering dependent loads) while switching back to the fallback and then to a real value again.
+     * <p>Best used in combination with {@link isLoading} and {@link fallback}</p>
+     * <p>Default: false</p>
+     */
+    silent?: boolean
+
+    /**
      * Performance: Set to false, to mark following `load(...)` statements do not depend on the result. I.e when used only for immediate rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
      * Therefore, the following `load(...)` statements may not need a reload and can run in parallel.
      * <p>
@@ -842,7 +873,6 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     typeof loaderFn === "function" || throwError("loaderFn is not a function");
     if(currentRenderRun === undefined) throw new Error("load is not used from inside a watchedComponent")
 
-    const hasFallback = options.hasOwnProperty("fallback");
     const renderRun = currentRenderRun;
     const frame = renderRun.frame
     const persistent = frame.persistent;
@@ -886,6 +916,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         lastLoadRun.loadCall.id === loadCall.id || throwError(new Error("Illegal state: lastLoadRun associated with different LoadCall. Please make sure that you don't use non-`watched(...)` inputs (useState, useContext) in your watchedComponent. " + `. Debug info: Ids: ${lastLoadRun.loadCall.id} vs. ${loadCall.id}. See cause for falsely associcated loadCall.`, {cause: lastLoadRun.loadCall.diagnosis_callstack})); // Validity check
     }
 
+    const fallback = loadCall.getFallbackValue();
+
     try {
         if(renderRun.isPassive) {
             // Don't look at recorded reads. Assume the order has not changed
@@ -895,8 +927,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                 //throw new Error("More load(...) statements in render run for status indication seen than last time. isLoading()'s result must not influence the structure/order of load(...) statements.");
                 // you can still get here when there was a some critical pending load before this, that had sliced off the rest. TODO: don't slice and just mark them as invalid
 
-                if(hasFallback) {
-                    return options.fallback;
+                if(fallback) {
+                    return fallback.value;
                 }
                 else {
                     throw new Error(`When using isLoading(), you must specify fallbacks for all your load statements:  load(..., {fallback: some-fallback-value})`);
@@ -911,8 +943,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                 throw lastLoadRun.result.rejectReason;
             }
             else if(lastLoadRun.result.state === "pending") {
-                if(hasFallback) {
-                    return options.fallback;
+                if(fallback) {
+                    return fallback.value;
                 }
                 throw lastLoadRun.result.promise;
             }
@@ -961,8 +993,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             if (lastLoadRun.result.state === "pending") {
                 renderRun.somePending = lastLoadRun.result.promise;
                 renderRun.somePendingAreCritical ||= (options.critical !== false);
-                if (hasFallback) { // Fallback specified ?
-                    return {result: options.fallback};
+                if (fallback) { // Fallback available ?
+                    return {result: fallback.value};
                 }
 
                 lastLoadRun.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
@@ -986,8 +1018,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         else { // cannot use last result ?
             if(renderRun.somePending && renderRun.somePendingAreCritical) { // Performance: Some previous (and dependent) results are pending, so loading this one would trigger a reload soon
                 // don't make a new call
-                if(hasFallback) {
-                    return options.fallback!;
+                if(fallback) {
+                    return fallback.value;
                 }
                 else {
                     throw renderRun.somePending;
@@ -1009,7 +1041,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                     return;
                 }
 
-                if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
+                if (fallback && (fallback.value === value)) { // Result is same as fallback ?
                     // Loaded value did not change / No re-render needed because the fallback is already displayed
                     if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
                         loadRun.activateRegularRePollingIfNeeded();
@@ -1034,8 +1066,8 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             renderRun.somePending = resultPromise;
             renderRun.somePendingAreCritical ||= (options.critical !== false);
 
-            if (hasFallback) {
-                return options.fallback!;
+            if (fallback) {
+                return fallback.value;
             } else {
                 throw resultPromise; // Throwing a promise will put the react component into suspense state
             }

@@ -68,7 +68,7 @@ either...
 ### Performance optimization for load(...)
 To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
-- See the `LoadOptions#fallback` and `LoadOptions#critical` settings. This can allow loading in parallel as well.
+- See the `LoadOptions#fallback`, `LoadOptions#silent` and `LoadOptions#critical` settings.
 - Use the `preserve` function on all your fetched data, to smartly ensure non-changing object instances in your app (`newFetchResult` **===** `oldFetchResult`; Triple-equals. Also for the deep result_). Changed object instances can either cascade to a lot of re-loads or result in your component still watching the old instance.
   _Think of it like: The preserve function does for your data, what React does for your component tree: It smartly remembers the instances, if needed with the help of an id or key, and re-applies the re-fetched/re-rendered properties to them, so the object-identity/component-state stays the same._  
   👍 `load(...)` does call `preserve` by default to enforce this paradigm and give you the best, trouble free experience.
