@@ -63,26 +63,21 @@ type WatchedComponentOptions = {
     preserveProps?: boolean
 }
 
-class RecordedLoadCall {
+/**
+ * Contains the preconditions and the state / polling state for a load(...) statement.
+ * Very volatile. Will be invalid as soon as a precondition changes, or if it's not used or currently not reachable (in that case there will spawn another LoadRun).
+ */
+class LoadRun {
     debug_id = ++debug_idGenerator;
 
     loadCall: LoadCall
 
-    /**
-     * TODO: move to loadCall
-     * Back reference to it
-     */
-    watchedComponentPersistent: WatchedComponentPersistent;
 
     /**
-     * Reference saved only for polling
+     * Reference may be forgotten, when not needed for re-polling
      */
     loaderFn?: (oldResult?: unknown) => Promise<unknown>;
 
-    /**
-     * TODO: move to loadCall
-     */
-    options!: LoadOptions & Partial<PollOptions>;
 
     /**
      * From the beginning or previous load call up to this one
@@ -101,16 +96,18 @@ class RecordedLoadCall {
     rePollTimer?: any;
 
     /**
-     * index in this.watchedComponentPersistent.loadCalls
+     * index in this.watchedComponentPersistent.loadRuns
      */
     cache_index: number;
 
-    diagnosis_callstack?: Error
 
     get isObsolete() {
-        return !(this.watchedComponentPersistent.loadCalls.length > this.cache_index && this.watchedComponentPersistent.loadCalls[this.cache_index] === this); // this.watchedComponentPersistent.loadCalls does not contain this?
+        return !(this.loadCall.watchedComponentPersistent.loadRuns.length > this.cache_index && this.loadCall.watchedComponentPersistent.loadRuns[this.cache_index] === this); // this.watchedComponentPersistent.loadRuns does not contain this?
     }
 
+    get options() {
+        return this.loadCall.options;
+    }
 
     get name() {
         return this.options.name;
@@ -121,9 +118,13 @@ class RecordedLoadCall {
             if(this.options.fixedInterval !== false) this.lastExecTime = new Date(); // Take timestamp
             const lastResult = this.loadCall.lastResult;
             let result = await this.loaderFn!(lastResult);
-            if(lastResult !== undefined && this.options.preserve !== false) { // Preserve enabled?
-                const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
-                result = _preserve(lastResult,result, preserveOptions, {callStack: this.diagnosis_callstack});
+            if(this.options.preserve !== false) { // Preserve enabled?
+                if(result !== null && typeof result === "object") { // Result is mergeable ?
+                    this.loadCall.isUniquelyIdentified() || throwError(new Error(`Please specify a key via load(..., { key=<your key> }), so the result's object identity can be preserved. See LoadOptions#key and LoadOptions#preserve. Look at the cause to see where load(...) was called`, {cause: this.loadCall.diagnosis_callstack}));
+                    const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
+                    result = _preserve(lastResult,result, preserveOptions, {callStack: this.loadCall.diagnosis_callstack});
+                    this.loadCall.lastResult = result;
+                }
             }
             return result
         }
@@ -192,13 +193,13 @@ class RecordedLoadCall {
             if (isUnchanged) {
                 // Loaded value did not change / No re-render needed because the fallback is already displayed
             } else {
-                this.watchedComponentPersistent.handleChangeEvent();
+                this.loadCall.watchedComponentPersistent.handleChangeEvent();
             }
         }
         catch (e) {
             this.result = {state: "rejected", rejectReason: e};
             if(!this.isObsolete) {
-                this.watchedComponentPersistent.handleChangeEvent();
+                this.loadCall.watchedComponentPersistent.handleChangeEvent();
             }
         }
     }
@@ -218,12 +219,10 @@ class RecordedLoadCall {
     }
 
 
-    constructor(watchedComponentPersistent: WatchedComponentPersistent, loaderFn: (() => Promise<unknown>) | undefined, options: LoadOptions & Partial<PollOptions>, cache_index: number, diagnosis_callStack: Error | undefined) {
-        this.watchedComponentPersistent = watchedComponentPersistent;
+    constructor(loadCall: LoadCall, loaderFn: LoadRun["loaderFn"], cache_index: number) {
+        this.loadCall = loadCall;
         this.loaderFn = loaderFn;
-        this.options = options;
         this.cache_index = cache_index;
-        this.diagnosis_callstack = diagnosis_callStack;
     }
 }
 
@@ -234,12 +233,48 @@ class LoadCall {
     /**
      * Unique id. (Source can be determined through the call stack), or, if run in a loop, it must be specified by the user
      */
-    id: string | number | object;
+    id?: string | number | object;
+
+    /**
+     * Back reference to it
+     */
+    watchedComponentPersistent: WatchedComponentPersistent;
+
+    /**
+     *
+     */
+    options!: LoadOptions & Partial<PollOptions>;
 
     /**
      * Fore preserving
      */
     lastResult: unknown
+
+
+    diagnosis_callstack?: Error
+    diagnosis_callerSourceLocation?: string
+
+    constructor(id: LoadCall["id"], watchedComponentPersistent: WatchedComponentPersistent, options: LoadOptions & Partial<PollOptions>, diagnosis_callStack: Error | undefined, diagnosis_callerSourceLocation: string | undefined) {
+        this.id = id;
+        this.watchedComponentPersistent = watchedComponentPersistent;
+        this.options = options;
+        this.diagnosis_callstack = diagnosis_callStack;
+        this.diagnosis_callerSourceLocation = diagnosis_callerSourceLocation
+    }
+
+    isUniquelyIdentified() {
+        let registeredForId = this.watchedComponentPersistent.loadCalls.get(this.id);
+        if(registeredForId === undefined) {
+            throw new Error("Illegal state: No Load call for this id was registered");
+        }
+        if(registeredForId === null) {
+            return false; // Null means: Not unique
+        }
+        if(registeredForId !== this) {
+            throw new Error("Illegal state: A different load call for this id was registered.");
+        }
+        return true;
+    }
 }
 
 /**
@@ -253,7 +288,15 @@ class WatchedComponentPersistent {
      */
     watchedProps = getWatchedGraph().getProxyFor({});
 
-    loadCalls: RecordedLoadCall[] = [];
+    /**
+     * id -> loadCall. Null when there are multiple for that id
+     */
+    loadCalls = new Map<LoadCall["id"], LoadCall | null>();
+
+    /**
+     * LoadRuns in the exact order, they occur
+     */
+    loadRuns: LoadRun[] = [];
 
     currentFrame?: Frame
 
@@ -353,7 +396,7 @@ class WatchedComponentPersistent {
 
 /**
  *
- * Lifecycle: Render + optional passive render + timespan until the next render (=because something new happened) or complete unmount.
+ * Lifecycle: Render + optional passive render + timespan until the next render (=because something new happened) or until the final unmount.
  * Note: In case of an error and wrapped in a recoverable <ErrorBoundary>, the may not even be a mount but this Frame still exist.
  *
  */
@@ -405,7 +448,7 @@ class Frame {
 
         this.startPropChangeListeningFns.forEach(c => c());
 
-        this.persistent.loadCalls.forEach(lc => lc.activateRegularRePollingIfNeeded()); // Schedule re-polls
+        this.persistent.loadRuns.forEach(lc => lc.activateRegularRePollingIfNeeded()); // Schedule re-polls
 
         this.isListeningForChanges = true;
     }
@@ -423,7 +466,7 @@ class Frame {
 
         this.cleanUpPropChangeListenerFns.forEach(c => c()); // Clean the listeners
         if(deactivateRegularRePoll) {
-            this.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // Stop scheduled re-polls
+            this.persistent.loadRuns.forEach(lc => lc.deactivateRegularRePoll()); // Stop scheduled re-polls
         }
 
         this.isListeningForChanges = false;
@@ -470,6 +513,7 @@ class RenderRun {
 
     recordedReads: RecordedRead[] = [];
 
+    loadCallIdsSeen = new Set<LoadCall["id"]>();
 
     /**
      * Increased, when we see a load(...) call
@@ -479,10 +523,25 @@ class RenderRun {
     onFinallyAfterUsersComponentFnListeners: (()=>void)[] = [];
 
     /**
-     * Cache of persistent.loadCalls.some(l => l.result.state === "pending")
+     * Cache of persistent.loadRuns.some(l => l.result.state === "pending")
      */
     somePending?: Promise<unknown>;
     somePendingAreCritical = false;
+
+    handleRenderFinishedSuccessfully() {
+        if(!this.isPassive) {
+            // Delete unused loadCalls
+            const keys = [...this.frame.persistent.loadCalls.keys()];
+            keys.forEach(key => {
+                if (!this.loadCallIdsSeen.has(key)) {
+                    this.frame.persistent.loadCalls.delete(key);
+                }
+            })
+
+            // Delete unused loadRuns:
+            this.frame.persistent.loadRuns = this.frame.persistent.loadRuns.slice(0, this.loadCallIndex+1);
+        }
+    }
 
     /**
      * Body of useEffect
@@ -508,7 +567,7 @@ class RenderRun {
             }
             this.frame.persistent.onceOnReRenderListeners.push(() => {
                 this.frame.stopListeningForChanges();
-                this.frame.persistent.loadCalls.forEach(lc => lc.deactivateRegularRePoll()); // hacky solution2: The lines above have propably skipped this, so do it now
+                this.frame.persistent.loadRuns.forEach(lc => lc.deactivateRegularRePoll()); // hacky solution2: The lines above have propably skipped this, so do it now
             }); //Instead clean up listeners next time
         }
         else {
@@ -576,7 +635,9 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
             try {
                 try {
-                    return componentFn(persistent.watchedProps as PROPS); // Run the user's component function
+                    let result = componentFn(persistent.watchedProps as PROPS);  // Run the user's component function
+                    renderRun.handleRenderFinishedSuccessfully();
+                    return result;
                 }
                 finally {
                     renderRun.onFinallyAfterUsersComponentFnListeners.forEach(l => l()); // Call listeners
@@ -669,6 +730,20 @@ function useLoad<T>(loader: () => Promise<T>): T {
 
 type LoadOptions = {
     /**
+     * For {@link LoadOptions#preserve preserving} the result's object identity.
+     * Normally, this is obtained from the call stack information plus the {@link LoadOptions#key}.
+     *
+     * @see LoadOptions#key
+     */
+    id?: string | number | object
+
+    /**
+     * Helps identifying the load(...) call from inside a loop for {@link LoadOptions#preserve preserving} the result's object identity.
+     * @see LoadOptions#id
+     */
+    key?: string | number
+
+    /**
      * If you specify a fallback, the component can be immediately rendered during loading.
      * <p>
      * undefined = undefined as fallback.
@@ -746,6 +821,7 @@ export function load<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, option
  * @param options
  */
 export function load<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, options: LoadOptions & {fallback: FALLBACK}): T | FALLBACK
+
 /**
  * Runs the async loaderFn and re-renders, if its promise was resolved. Also re-renders and re-runs loaderFn, when some of its watched dependencies, used prior or instantly in the loaderFn, change.
  * Puts the component into suspense while loading. Throws an error when loaderFn throws an error or its promise is rejected. Resumes from react-error-boundary automatically when loaderFn was re-run(because of the above).
@@ -756,7 +832,7 @@ export function load<T,FALLBACK>(loaderFn: (oldResult?: T) => Promise<T>, option
  * @param options
  */
 export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, options: LoadOptions & Partial<PollOptions> = {}): any {
-    const diagnosis_callStack = options.preserve !== false?new Error("load(...) was called"):undefined // Look one level up, where you called load(...)
+    const callStack = new Error("load(...) was called") // Look not here, but one level down in the stack, where you called load(...)
 
     // Wording:
     // - "previous" means: load(...) statements more upwards in the user's code
@@ -771,10 +847,43 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     const frame = renderRun.frame
     const persistent = frame.persistent;
     const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
-    let lastLoadCall = renderRun.loadCallIndex < persistent.loadCalls.length?persistent.loadCalls[renderRun.loadCallIndex]:undefined;
-    if(lastLoadCall) {
-        lastLoadCall.loaderFn = options.interval ? loaderFn : undefined; // only needed, when polling.
-        lastLoadCall.options = options; // Update options. It is allowed that these can change over time. I.e. the poll interval or the name.
+    const callerSourceLocation = callStack.stack ? getCallerSourceLocation(callStack.stack) : undefined;
+
+    // Determine loadCallId:
+    let loadCallId: LoadCall["id"] | undefined
+    if(options.id !== undefined) {
+        options.key === undefined || throwError("Must not set both: LoadOptions#id and LoadOptions#key"); // Validity check
+
+        loadCallId = options.id;
+
+        !renderRun.loadCallIdsSeen.has(loadCallId) || throwError(`LoadOptions#id=${loadCallId} is not unique`);
+    } else if (options.key !== undefined) {
+        callerSourceLocation || throwError("No callstack available to compose the id. Please specify LoadOptions#id instead of LoadOptions#key"); // validity check
+        loadCallId = `${callerSourceLocation}___${options.key}` // I.e. ...
+        !renderRun.loadCallIdsSeen.has(loadCallId) || throwError(`LoadOptions#key=${options.key} is used multiple times / is not unique here.`);
+    } else {
+        loadCallId = callerSourceLocation; // from source location only
+    }
+    const isUnique = !(renderRun.loadCallIdsSeen.has(loadCallId) || persistent.loadCalls.get(loadCallId) === null);
+    renderRun.loadCallIdsSeen.add(loadCallId);
+
+    // Find the loadCall or create it:
+    let loadCall: LoadCall | undefined
+    if(isUnique) {
+        loadCall = persistent.loadCalls.get(loadCallId) as (LoadCall | undefined);
+    }
+    if(loadCall === undefined) {
+        loadCall = new LoadCall(loadCallId, persistent, options, callStack, callerSourceLocation);
+    }
+    persistent.loadCalls.set(loadCallId, isUnique?loadCall:null);
+
+    loadCall.options = options; // Update options. It is allowed that these can change over time. I.e. the poll interval or the name.
+
+    // Determine lastLoadRun:
+    let lastLoadRun = renderRun.loadCallIndex < persistent.loadRuns.length?persistent.loadRuns[renderRun.loadCallIndex]:undefined;
+    if(lastLoadRun) {
+        lastLoadRun.loaderFn = options.interval ? loaderFn : undefined; // Update. only needed, when polling.
+        lastLoadRun.loadCall.id === loadCall.id || throwError(new Error("Illegal state: lastLoadRun associated with different LoadCall. Please make sure that you don't use non-`watched(...)` inputs (useState, useContext) in your watchedComponent. " + `. Debug info: Ids: ${lastLoadRun.loadCall.id} vs. ${loadCall.id}. See cause for falsely associcated loadCall.`, {cause: lastLoadRun.loadCall.diagnosis_callstack})); // Validity check
     }
 
     try {
@@ -782,7 +891,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             // Don't look at recorded reads. Assume the order has not changed
 
             // Validity check:
-            if(lastLoadCall === undefined) {
+            if(lastLoadRun === undefined) {
                 //throw new Error("More load(...) statements in render run for status indication seen than last time. isLoading()'s result must not influence the structure/order of load(...) statements.");
                 // you can still get here when there was a some critical pending load before this, that had sliced off the rest. TODO: don't slice and just mark them as invalid
 
@@ -794,18 +903,18 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                 }
             }
 
-            //** return lastLoadCall.result:
-            if(lastLoadCall.result.state === "resolved") {
-                return watched(lastLoadCall.result.resolvedValue);
+            //** return lastLoadRun.result:
+            if(lastLoadRun.result.state === "resolved") {
+                return watched(lastLoadRun.result.resolvedValue);
             }
-            else if(lastLoadCall?.result.state === "rejected") {
-                throw lastLoadCall.result.rejectReason;
+            else if(lastLoadRun?.result.state === "rejected") {
+                throw lastLoadRun.result.rejectReason;
             }
-            else if(lastLoadCall.result.state === "pending") {
+            else if(lastLoadRun.result.state === "pending") {
                 if(hasFallback) {
                     return options.fallback;
                 }
-                throw lastLoadCall.result.promise;
+                throw lastLoadRun.result.promise;
             }
             else {
                 throw new Error("Unhandled state");
@@ -825,50 +934,50 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
 
 
     function inner()  {
-        const recordedReadsAreEqualSinceLastCall = lastLoadCall && recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadCall.recordedReadsBefore)
+        const recordedReadsAreEqualSinceLastCall = lastLoadRun && recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadRun.recordedReadsBefore)
         if(!recordedReadsAreEqualSinceLastCall) {
-            persistent.loadCalls = persistent.loadCalls.slice(0, renderRun.loadCallIndex); // Erase all snaphotted loadCalls after here (including this one).
-            lastLoadCall = undefined;
+            persistent.loadRuns = persistent.loadRuns.slice(0, renderRun.loadCallIndex); // Erase all loadRuns after here (including this one).
+            lastLoadRun = undefined;
         }
 
         /**
          * Can we use the result from last call ?
          */
         const canReuseLastResult = () => {
-            if(!lastLoadCall) { // call was not recorded last render or is invalid?
+            if(!lastLoadRun) { // call was not recorded last render or is invalid?
                 return false;
             }
             if (!recordedReadsAreEqualSinceLastCall) {
                 return false;
             }
 
-            if (lastLoadCall.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+            if (lastLoadRun.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
                 return false;
             }
 
-            if (lastLoadCall.result.state === "resolved") {
-                return {result: lastLoadCall.result.resolvedValue}
+            if (lastLoadRun.result.state === "resolved") {
+                return {result: lastLoadRun.result.resolvedValue}
             }
-            if (lastLoadCall.result.state === "pending") {
-                renderRun.somePending = lastLoadCall.result.promise;
+            if (lastLoadRun.result.state === "pending") {
+                renderRun.somePending = lastLoadRun.result.promise;
                 renderRun.somePendingAreCritical ||= (options.critical !== false);
                 if (hasFallback) { // Fallback specified ?
                     return {result: options.fallback};
                 }
 
-                lastLoadCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
-                throw lastLoadCall.result.promise; // Throwing a promise will put the react component into suspense state
-            } else if (lastLoadCall.result.state === "rejected") {
-                lastLoadCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
-                throw lastLoadCall.result.rejectReason;
+                lastLoadRun.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
+                throw lastLoadRun.result.promise; // Throwing a promise will put the react component into suspense state
+            } else if (lastLoadRun.result.state === "rejected") {
+                lastLoadRun.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
+                throw lastLoadRun.result.rejectReason;
             } else {
-                throw new Error("Invalid state of lastLoadCall.result.state")
+                throw new Error("Invalid state of lastLoadRun.result.state")
             }
         }
 
         const canReuse = canReuseLastResult();
         if (canReuse !== false) { // can re-use ?
-            const lastCall = persistent.loadCalls[renderRun.loadCallIndex];
+            const lastCall = persistent.loadRuns[renderRun.loadCallIndex];
 
             lastCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn
 
@@ -885,42 +994,42 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                 }
             }
 
-            // *** make a loadCall / exec loaderFn ***:
+            // *** make a loadRun / exec loaderFn ***:
 
-            let loadCall = new RecordedLoadCall(persistent, loaderFn, options, renderRun.loadCallIndex, diagnosis_callStack);
-            loadCall.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
-            const resultPromise = Promise.resolve(loadCall.exec()); // Exec loaderFn
-            loadCall.loaderFn = options.interval?loadCall.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
-            loadCall.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
+            let loadRun = new LoadRun(loadCall!, loaderFn, renderRun.loadCallIndex);
+            loadRun.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
+            const resultPromise = Promise.resolve(loadRun.exec()); // Exec loaderFn
+            loadRun.loaderFn = options.interval?loadRun.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
+            loadRun.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
-                loadCall.result = {state: "resolved", resolvedValue: value};
+                loadRun.result = {state: "resolved", resolvedValue: value};
 
-                if(loadCall.isObsolete) {
+                if(loadRun.isObsolete) {
                     return;
                 }
 
                 if (hasFallback && (value === null || (!(typeof value === "object")) && value === options.fallback)) { // Result is primitive and same as fallback ?
                     // Loaded value did not change / No re-render needed because the fallback is already displayed
                     if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
-                        loadCall.activateRegularRePollingIfNeeded();
+                        loadRun.activateRegularRePollingIfNeeded();
                     }
                 } else {
                         persistent.handleChangeEvent(); // Will also do a rerender and call activateRegularRePollingIfNeeded, like above
                 }
             });
             resultPromise.catch(reason => {
-                loadCall.result = {state: "rejected", rejectReason: reason}
+                loadRun.result = {state: "rejected", rejectReason: reason}
 
-                if(loadCall.isObsolete) {
+                if(loadRun.isObsolete) {
                     return;
                 }
 
                 persistent.handleChangeEvent(); // Re-render. The next render will see state=rejected for this load statement and throw it then.
             })
-            loadCall.result = {state: "pending", promise: resultPromise};
+            loadRun.result = {state: "pending", promise: resultPromise};
 
-            persistent.loadCalls[renderRun.loadCallIndex] = loadCall; // add / replace
+            persistent.loadRuns[renderRun.loadCallIndex] = loadRun; // add / replace
 
             renderRun.somePending = resultPromise;
             renderRun.somePendingAreCritical ||= (options.critical !== false);
@@ -934,6 +1043,21 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     }
 
     function watched(value: unknown) { return (value !== null && typeof value === "object")?frame.watchedGraph.getProxyFor(value):value }
+
+    /**
+     *
+     * @param callStack
+     * @returns i.e. "at http://localhost:5173/index.tsx:98:399"
+     */
+    function getCallerSourceLocation(callStack: String | undefined) {
+        callStack = callStack!.replace(/.*load\(\.\.\.\) was called\s*/, ""); // Remove trailing error from callstack
+        const callStackRows = callStack! .split("\n");
+        callStackRows.length >= 2 || throwError(`Unexpected callstack format: ${callStack}`); // Validity check
+        let result = callStackRows[1].trim();
+        result !== "" || throwError("Illegal result");
+        result = result.replace(/at\s*/, ""); // Remove trailing "at "
+        return result;
+    }
 }
 
 /**
@@ -958,7 +1082,7 @@ export function isLoading(nameFilter?: string): boolean {
     // Validity check:
     if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
-    return probe(() => renderRun.frame.persistent.loadCalls.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
+    return probe(() => renderRun.frame.persistent.loadRuns.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
 }
 
 /**
@@ -985,7 +1109,7 @@ export function loadFailed(nameFilter?: string): unknown {
     if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
     return probe(() => {
-        return (renderRun.frame.persistent.loadCalls.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
+        return (renderRun.frame.persistent.loadRuns.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
     }, undefined);
 }
 

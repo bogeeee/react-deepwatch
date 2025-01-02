@@ -162,7 +162,7 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
                     if(item.name === "item3") { return {msg: `counter: ${item.counter} (no fetch stats. polling should not re-render)`}}
                     return {msg: `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`}
                 }, 500),
-            {name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: {msg:"fallback"}, critical: state.critical}:{})}
+            {key: item.name, name: item.name, interval: item.poll?1000:undefined, ...(state.withFallbacks?{fallback: {msg:"fallback"}, critical: state.critical}:{})}
         ).msg}
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
             &#160;<input type="checkbox" checked={item.poll} onChange={(event) => {item.poll = event.target.checked}} />poll
