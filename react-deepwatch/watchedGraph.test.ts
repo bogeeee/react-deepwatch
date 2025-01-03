@@ -9,7 +9,7 @@ import {
 import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
 import {ObjKey} from "./common";
-import {enhanceWithWriteTracker} from "./globalWriteTracking";
+import {deleteProperty, enhanceWithWriteTracker} from "./globalWriteTracking";
 import {ProxiedGraph} from "./proxiedGraph";
 
 beforeEach(() => {
@@ -144,10 +144,10 @@ describe('ProxiedGraph tests', () => {
             a: "b"
         };
         const proxy = new WatchedGraph().getProxyFor(origObj);
-        expect(() => {
-            //@ts-ignore
-            delete proxy.a;
-        }).toThrow();
+        expect(Reflect.ownKeys(proxy)).toStrictEqual(["a"]);
+        delete proxy.a;
+        expect(proxy.a).toBeUndefined();
+        expect(Reflect.ownKeys(proxy)).toStrictEqual([]);
     });
 
 
@@ -659,6 +659,26 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    testRecordReadAndWatch("object.keys with delete", () => {
+        const obj: Record<string, unknown> = {existingProp: "123"};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(Object.keys(obj))},
+            writerFn: (obj) => {deleteProperty(obj, "existingProp" as any)},
+            falseWritesFn: (obj) => {obj.existingProp="new"; deleteProperty (obj as any, "anotherProp")}
+        }
+    });
+
+    testRecordReadAndWatch("Delete object property", () => {
+        const obj: {someProp?: string} = {someProp: "123"};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(obj.someProp)},
+            writerFn: (obj) => {deleteProperty(obj as any, "someProp")},
+            falseReadsFn: (obj) => {read((obj as any).someOtherProp)},
+            falseWritesFn: (obj) => {deleteProperty (obj as any, "anotherProp")}
+        }
+    });
 
     testRecordReadAndWatch("Set deep property", () => {
         const obj: {someDeep: {someProp?: string}} = {someDeep: {}};

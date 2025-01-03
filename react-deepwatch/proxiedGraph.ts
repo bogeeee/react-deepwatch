@@ -61,8 +61,9 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         this.proxy = new Proxy(targetForProxy, this);
     }
 
-    deleteProperty(target: object, p: string | symbol): boolean {
-        throw new Error("Must not use delete on a proxied object. Handling of change tracking etc. for this may be not implemented");
+    deleteProperty(target: object, key: string | symbol): boolean {
+        //@ts-ignore
+        return delete this.target[key];
     }
 
     defineProperty(target: object, property: string | symbol, attributes: PropertyDescriptor): boolean {

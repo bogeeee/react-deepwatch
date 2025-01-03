@@ -5,7 +5,7 @@ import {RecordedReadOnProxiedObject, WatchedGraphHandler} from "./watchedGraph";
 import {MapSet} from "./Util";
 import {WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterWriteListener, Clazz, ObjKey} from "./common";
-import {ObjectProxyHandler} from "./globalObjectWriteTracking";
+import {ObjectProxyHandler, writeListenersForObject} from "./globalObjectWriteTracking";
 
 
 const enhancedObjects = new WeakSet<object>();
@@ -52,4 +52,31 @@ export function enhanceWithWriteTracker(obj: object) {
         Object.setPrototypeOf(obj, proxy);
     }
     enhancedObjects.add(obj);
+}
+
+/**
+ * Use this to delete properties of enhanced objects. Otherwise they are not deletable and the write tracker cannot track the object's keys modification and inform listeners
+ * @param obj
+ * @param key
+ */
+export function deleteProperty<O extends object>(obj: O, key: keyof O) {
+    if(!objectIsEnhancedWithWriteTracker(obj)) {
+        return delete obj[key];
+    }
+
+    //TODO: implement for arrays
+
+    const doesExist = Object.getOwnPropertyDescriptor(obj, key) !== undefined;
+
+    if(doesExist) {
+        //@ts-ignore
+        obj[key] = undefined; // Set to undefined first, so property change listeners will get informed
+    }
+
+    const result = delete obj[key];
+    if(doesExist) {
+        writeListenersForObject.get(obj)?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(obj)));
+    }
+
+    return result;
 }

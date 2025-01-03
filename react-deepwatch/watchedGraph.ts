@@ -478,7 +478,17 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 
     deleteProperty(target: object, key: string | symbol): boolean {
-        return super.deleteProperty(target, key);
+        const doesExists = Object.getOwnPropertyDescriptor(this.target, key) !== undefined;
+        if(doesExists) {
+            this.set(target, key, undefined, this.proxy); // Set to undefined first, so property change listeners will get informed
+        }
+        const result = super.deleteProperty(target, key);
+        if(doesExists) {
+            if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
+                writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(this.target)));
+            }
+        }
+        return result;
     }
 
     ownKeys(target: object): ArrayLike<string | symbol> {

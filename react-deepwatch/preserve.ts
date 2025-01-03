@@ -2,6 +2,7 @@ import {v} from "vitest/dist/reporters-yx5ZTtEV";
 import {visitReplace} from "./Util";
 import _ from "underscore";
 import {invalidateObject} from "./proxiedGraph";
+import {deleteProperty} from "./globalWriteTracking";
 
 const normalizeListsHint = `Hint: When this is fetched server data and having duplicate items in a list is intentional, you can pre-process it with the normalizeLists function first. See: import {normalizeLists, normalizeList} from "react-deepwatch"`
 
@@ -250,7 +251,7 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
                 //@ts-ignore
                 if (Object.getOwnPropertyDescriptor(newValue, key) === undefined && newValue[key] === undefined) {
                     //@ts-ignore
-                    delete oldValue[key];
+                    deleteProperty(oldValue,key);
                 }
             }
         }
@@ -282,7 +283,7 @@ function preserve_array<T>(oldArray: Array<unknown>, newArray: Array<unknown>, c
 
     for(let i in oldArray) {
         if(!indicesInNewArray.has(i)) {
-            delete oldArray[i]; // This properly deletes the key as well, so a for...in iteration works consitent. Still it does not decrease oldArray.length
+            deleteProperty(oldArray,i as any); // This properly deletes the key as well, so a for...in iteration works consitent. Still it does not decrease oldArray.length
         }
     }
 
