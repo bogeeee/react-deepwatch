@@ -1041,14 +1041,20 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                     return;
                 }
 
-                if (fallback && (fallback.value === value)) { // Result is same as fallback ?
-                    // Loaded value did not change / No re-render needed because the fallback is already displayed
+                /*
+                const otherLoadsAreWaiting=true;// Other loads are waiting for this critical loadRun? TODO
+                const wasErrored = true; // TODO
+                if (fallback && (fallback.value === value) && !otherLoadsAreWaiting && !currentRenderRun!.isPassive && !wasErrored) { // Result is same as fallback (already displayed) + this situation allows to skip re-rendering because it would stay unchanged?
+                    // Not worth it / too risky, just to save one rerender. Maybe i have overseen something.
                     if(persistent.currentFrame?.isListeningForChanges) { // Frame is "alive" ?
                         loadRun.activateRegularRePollingIfNeeded();
                     }
                 } else {
                         persistent.handleChangeEvent(); // Will also do a rerender and call activateRegularRePollingIfNeeded, like above
                 }
+                */
+
+                persistent.handleChangeEvent();
             });
             resultPromise.catch(reason => {
                 loadRun.result = {state: "rejected", rejectReason: reason}
