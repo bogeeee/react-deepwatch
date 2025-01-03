@@ -5,7 +5,7 @@ import {
     RecordedValueRead,
     WatchedGraph
 } from "./watchedGraph";
-import {arraysAreEqualsByPredicateFn, PromiseState, throwError} from "./Util";
+import {arraysAreEqualsByPredicateFn, isObject, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {enhanceWithWriteTracker} from "./globalWriteTracking";
@@ -119,7 +119,7 @@ class LoadRun {
             const lastResult = this.loadCall.lastResult;
             let result = await this.loaderFn!(lastResult);
             if(this.options.preserve !== false) { // Preserve enabled?
-                if(result !== null && typeof result === "object") { // Result is mergeable ?
+                if(isObject(result)) { // Result is mergeable ?
                     this.loadCall.isUniquelyIdentified() || throwError(new Error(`Please specify a key via load(..., { key:<your key> }), so the result's object identity can be preserved. See LoadOptions#key and LoadOptions#preserve. Look at the cause to see where load(...) was called`, {cause: this.loadCall.diagnosis_callstack}));
                     const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
                     result = _preserve(lastResult,result, preserveOptions, {callStack: this.loadCall.diagnosis_callstack});
@@ -191,17 +191,20 @@ class LoadRun {
     async executeRePoll() {
         try {
             const value = await this.exec();
-            const isUnchanged = this.result.state === "resolved" && value === this.result.resolvedValue;
+            const isChanged = !(this.result.state === "resolved" && value === this.result.resolvedValue)
             this.result = {state: "resolved", resolvedValue:value}
 
             if(this.isObsolete) {
                 return;
             }
 
-            if (isUnchanged) {
-                // Loaded value did not change / No re-render needed because the fallback is already displayed
-            } else {
-                this.loadCall.watchedComponentPersistent.handleChangeEvent();
+            if(isChanged) {
+                this.loadCall.watchedComponentPersistent.handleChangeEvent(); // requests a re-render
+                return;
+            }
+            if(this.options.critical === false && isObject(value)) {
+                this.loadCall.watchedComponentPersistent.requestReRender(); // Non-critical objects are not watched. But their deep changed content is used in the render. I.e. <div>{ load(() => {return {msg: `counter: ...`}}, {critical:false}).msg }</div>
+                return;
             }
         }
         catch (e) {
@@ -937,7 +940,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
 
             //** return lastLoadRun.result:
             if(lastLoadRun.result.state === "resolved") {
-                return watched(lastLoadRun.result.resolvedValue);
+                return options.critical !== false?watched(lastLoadRun.result.resolvedValue):lastLoadRun.result.resolvedValue;
             }
             else if(lastLoadRun?.result.state === "rejected") {
                 throw lastLoadRun.result.rejectReason;
@@ -954,9 +957,10 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         }
 
         let result = inner();
-        if(options.critical !== false) {
-            renderRun.recordedReads.push(new RecordedValueRead(result)); // Add as dependency for the next loads
+        if(options.critical === false) {
+            return result; // non-watched and add no dependency
         }
+        renderRun.recordedReads.push(new RecordedValueRead(result)); // Add as dependency for the next loads
         return watched(result);
     }
     finally {

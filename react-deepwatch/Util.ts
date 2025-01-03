@@ -17,6 +17,10 @@ export function reThrowWithHint(e: unknown, hint: string) {
     throw e;
 }
 
+export function isObject(value: unknown) {
+    return value !== null && typeof value === "object";
+}
+
 /**
  * A Map<K, Set<V>>. But automatically add a new Set if needed
  */
