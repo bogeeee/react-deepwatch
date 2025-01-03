@@ -649,6 +649,17 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    testRecordReadAndWatch("object.keys", () => {
+        const obj: Record<string, unknown> = {existingProp: "123"};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(Object.keys(obj))},
+            writerFn: (obj) => {obj.someOtherProp = "456"},
+            falseWritesFn: (obj) => {obj.existingProp="new";}
+        }
+    });
+
+
     testRecordReadAndWatch("Set deep property", () => {
         const obj: {someDeep: {someProp?: string}} = {someDeep: {}};
         return {

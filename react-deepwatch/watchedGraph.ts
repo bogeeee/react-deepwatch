@@ -6,8 +6,16 @@ import {
     objectIsEnhancedWithWriteTracker
 } from "./globalWriteTracking";
 import {getWriteListenersForArray, WriteTrackedArray} from "./globalArrayWriteTracking";
-import {AfterReadListener, AfterWriteListener, Clazz, DualUseTracker, ObjKey} from "./common";
+import {
+    AfterChangeOwnKeysListener,
+    AfterReadListener,
+    AfterWriteListener,
+    Clazz,
+    DualUseTracker, getPropertyDescriptor,
+    ObjKey
+} from "./common";
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
+import _ from "underscore"
 
 
 export abstract class RecordedRead {
@@ -100,6 +108,38 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         }
 
         return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.key === other.key && this.value === other.value;
+    }
+}
+
+export class RecordedOwnKeysRead extends RecordedReadOnProxiedObject{
+    value!: ArrayLike<string | symbol>;
+
+    constructor(value: RecordedOwnKeysRead["value"]) {
+        super();
+        this.value = value;
+    }
+
+    get isChanged() {
+        return !_.isEqual(Reflect.ownKeys(this.obj), this.value);
+    }
+
+    onChange(listener: AfterChangeOwnKeysListener, trackOriginal=false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.obj);
+        }
+        getWriteListenersForObject(this.obj).afterChangeOwnKeys_listeners.add(listener);
+    }
+
+    offChange(listener: AfterChangeOwnKeysListener) {
+        writeListenersForObject.get(this.obj)?.afterChangeOwnKeys_listeners.delete(listener);
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedOwnKeysRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && _.isEqual(this.value, other.value);
     }
 }
 
@@ -426,10 +466,25 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 
     protected rawWrite(key: string | symbol, newValue: any) {
+        const isNewProperty = getPropertyDescriptor(this.target, key) === undefined;
         super.rawWrite(key, newValue);
         if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
-            writeListenersForObject.get(this.target)?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners;
+            const writeListeners = writeListenersForObject.get(this.target);
+            writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners;
+            if(isNewProperty) {
+                writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(this.target)));
+            }
         }
+    }
+
+    deleteProperty(target: object, key: string | symbol): boolean {
+        return super.deleteProperty(target, key);
+    }
+
+    ownKeys(target: object): ArrayLike<string | symbol> {
+        const result = Reflect.ownKeys(this.target);
+        this.fireAfterRead(new RecordedOwnKeysRead(result))
+        return result;
     }
 }
 

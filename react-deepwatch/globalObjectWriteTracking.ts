@@ -2,7 +2,14 @@
  * Listeners for one object
  */
 import {MapSet} from "./Util";
-import {AfterWriteListener, getPropertyDescriptor, GetterFlags, ObjKey, SetterFlags} from "./common";
+import {
+    AfterChangeOwnKeysListener,
+    AfterWriteListener,
+    getPropertyDescriptor,
+    GetterFlags,
+    ObjKey,
+    SetterFlags
+} from "./common";
 
 class ObjectWriteListeners {
     /**
@@ -10,6 +17,7 @@ class ObjectWriteListeners {
      */
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
+    afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
 }
 
 export const writeListenersForObject = new WeakMap<object, ObjectWriteListeners>();
@@ -123,6 +131,14 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         this.installSetterTrap(key);
         //@ts-ignore
         this.target[key] = value; // Set value again. this should call the setter trap
+
+        // There was no setter trap yet. This means that the key is new. Inform those listeners:
+        const writeListenersForTarget = writeListenersForObject.get(this.target);
+        if(writeListenersForTarget !== undefined) {
+            const ownKeys = Reflect.ownKeys(this.target);
+            writeListenersForTarget.afterChangeOwnKeys_listeners.forEach(l => l(ownKeys));
+        }
+
         return true;
     }
 

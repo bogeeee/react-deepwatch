@@ -100,7 +100,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         return value;
     }
 
-    rawRead(key: ObjKey): unknown {
+    protected rawRead(key: ObjKey): unknown {
         //@ts-ignore
         return this.target[key as any];
     }
