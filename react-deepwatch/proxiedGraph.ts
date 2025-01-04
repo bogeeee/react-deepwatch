@@ -2,6 +2,7 @@
  *
  */
 import {getPropertyDescriptor, GetterFlags, ObjKey, SetterFlags} from "./common";
+import {deleteProperty} from "./globalWriteTracking";
 
 export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
     // *** Configuration: ***
@@ -63,7 +64,7 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
 
     deleteProperty(target: object, key: string | symbol): boolean {
         //@ts-ignore
-        return delete this.target[key];
+        return deleteProperty(this.target,key);
     }
 
     defineProperty(target: object, property: string | symbol, attributes: PropertyDescriptor): boolean {
