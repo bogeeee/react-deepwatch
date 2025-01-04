@@ -540,7 +540,9 @@ describe('WatchedGraph record read and watch it', () => {
 
                     //writerFn:
                     {
-                        const changeHandler = vitest.fn();
+                        const changeHandler = vitest.fn(() => {
+                            const i = 0; // set breakpoint here
+                        });
                         if (mode === "With writes from inside") {
                             lastRead.onChange(changeHandler);
                             testSetup.writerFn(proxy);
@@ -559,18 +561,29 @@ describe('WatchedGraph record read and watch it', () => {
 
                     //falseWriteFn:
                     if (testSetup.falseWritesFn) {
-                        const changeHandler = vitest.fn();
+                        const testSetup = provideTestSetup();
+                        let watchedGraph = new WatchedGraph();
+                        const proxy = watchedGraph.getProxyFor(withNestedFacade?new WatchedGraph().getProxyFor(testSetup.origObj):testSetup.origObj);
+                        let reads: RecordedPropertyRead[] = [];
+                        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+                        reads = [];
+                        testSetup.readerFn(proxy);
+                        const lastRead = reads[reads.length - 1];
+
+                        const changeHandler = vitest.fn(() => {
+                            const i = 0; // set breakpoint here
+                        });
                         if (mode === "With writes from inside") {
                             lastRead.onChange(changeHandler);
-                            testSetup.falseWritesFn(proxy);
+                            testSetup.falseWritesFn!(proxy);
                         } else if (mode === "With writes from outside") {
                             lastRead.onChange(changeHandler, true);
-                            testSetup.falseWritesFn(origObj);
+                            testSetup.falseWritesFn!(origObj);
                         } else if (mode === "with write from another WatchedGraph") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
-                            testSetup.falseWritesFn(proxy2);
+                            testSetup.falseWritesFn!(proxy2);
                         }
                         expect(changeHandler).toBeCalledTimes(0);
                         lastRead.offChange(changeHandler);
@@ -587,7 +600,9 @@ describe('WatchedGraph record read and watch it', () => {
                         testSetup.falseReadsFn!(proxy);
                         expect(reads.length).toBeGreaterThan(0);
                         const lastRead = reads[reads.length - 1];
-                        const changeHandler = vitest.fn();
+                        const changeHandler = vitest.fn(() => {
+                            const i = 0;// set breakpoint here
+                        });
 
                         if (mode === "With writes from inside") {
                             lastRead.onChange(changeHandler);
@@ -645,7 +660,16 @@ describe('WatchedGraph record read and watch it', () => {
             readerFn: (obj) => {read(obj.someProp)},
             writerFn: (obj) => {obj.someProp = "123"},
             falseReadsFn: (obj) => {read((obj as any).someOtherProp)}, // TODO
-            falseWritesFn: (obj) => {obj.someProp="123" /* again */}
+        }
+    });
+
+    testRecordReadAndWatch("Set object property2", () => {
+        const obj: {someProp?: string} = {someProp: "123"};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(obj.someProp)},
+            writerFn: (obj) => {obj.someProp = "456"},
+            falseWritesFn: (obj) => {obj.someProp="123" /* same value */}
         }
     });
 
@@ -687,7 +711,17 @@ describe('WatchedGraph record read and watch it', () => {
             readerFn: (obj) => {read(obj.someDeep.someProp)},
             writerFn: (obj) => {obj.someDeep.someProp = "123"},
             falseReadsFn: (obj) => {read((obj as any).someOtherDeep);read((obj as any).someDeep.someOtherProp)}, // TODO
-            falseWritesFn: (obj) => {(obj as any).someOtherDeep = "345"; obj.someDeep.someProp="123" /* again */}
+            falseWritesFn: (obj) => {(obj as any).someOtherDeep = "345";}
+        }
+    });
+
+    testRecordReadAndWatch("Set deep property2", () => {
+        const obj: {someDeep: {someProp?: string}} = {someDeep: {someProp:"123"}};
+        return {
+            origObj: obj,
+            readerFn: (obj) => {read(obj.someDeep.someProp)},
+            writerFn: (obj) => {obj.someDeep.someProp = "345"},
+            falseWritesFn: (obj) => {obj.someDeep.someProp="123" /* same value */}
         }
     });
 
