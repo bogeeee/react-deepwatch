@@ -145,6 +145,7 @@ describe('ProxiedGraph tests', () => {
         };
         const proxy = new WatchedGraph().getProxyFor(origObj);
         expect(Reflect.ownKeys(proxy)).toStrictEqual(["a"]);
+        //@ts-ignore
         delete proxy.a;
         expect(proxy.a).toBeUndefined();
         expect(Reflect.ownKeys(proxy)).toStrictEqual([]);
@@ -517,43 +518,42 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void, writerFn: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
                     const testSetup = provideTestSetup();
 
-                    let watchedGraph = new WatchedGraph();
-                    let origObj = testSetup.origObj;
-                    if(withNestedFacade) {
-                        origObj = new WatchedGraph().getProxyFor(origObj);
-                    }
-
-                    const proxy = watchedGraph.getProxyFor(origObj);
-                    let reads: RecordedPropertyRead[] = [];
-                    watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
-
-                    reads = [];
-                    testSetup.readerFn(proxy);
-                    expect(reads.length).toBeGreaterThan(0);
-                    const lastRead = reads[reads.length - 1];
-
                     //writerFn:
-                    {
+                    if(testSetup.writerFn && testSetup.readerFn){
+                        const testSetup = provideTestSetup();
+                        let watchedGraph = new WatchedGraph();
+                        let origObj = testSetup.origObj;
+                        if(withNestedFacade) {
+                            origObj = new WatchedGraph().getProxyFor(origObj);
+                        }
+                        const proxy = watchedGraph.getProxyFor(origObj);
+                        let reads: RecordedPropertyRead[] = [];
+                        watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+                        reads = [];
+                        testSetup.readerFn!(proxy);
+                        expect(reads.length).toBeGreaterThan(0);
+                        const lastRead = reads[reads.length - 1];
+
                         const changeHandler = vitest.fn(() => {
                             const i = 0; // set breakpoint here
                         });
                         if (mode === "With writes from inside") {
                             lastRead.onChange(changeHandler);
-                            testSetup.writerFn(proxy);
+                            testSetup.writerFn!(proxy);
                         } else if (mode === "With writes from outside") {
                             lastRead.onChange(changeHandler, true);
-                            testSetup.writerFn(origObj);
+                            testSetup.writerFn!(origObj);
                         } else if (mode === "with write from another WatchedGraph") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
-                            testSetup.writerFn(proxy2);
+                            testSetup.writerFn!(proxy2);
                         }
                         expect(changeHandler).toBeCalledTimes(1);
                         lastRead.offChange(changeHandler);
@@ -562,12 +562,13 @@ describe('WatchedGraph record read and watch it', () => {
                     //falseWriteFn:
                     if (testSetup.falseWritesFn) {
                         const testSetup = provideTestSetup();
+                        let origObj = testSetup.origObj;
                         let watchedGraph = new WatchedGraph();
                         const proxy = watchedGraph.getProxyFor(withNestedFacade?new WatchedGraph().getProxyFor(testSetup.origObj):testSetup.origObj);
                         let reads: RecordedPropertyRead[] = [];
                         watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
                         reads = [];
-                        testSetup.readerFn(proxy);
+                        testSetup.readerFn!(proxy);
                         const lastRead = reads[reads.length - 1];
 
                         const changeHandler = vitest.fn(() => {
@@ -591,8 +592,9 @@ describe('WatchedGraph record read and watch it', () => {
 
 
                     //falseReadFn:
-                    if (testSetup.falseReadFn) {
+                    if (testSetup.falseReadFn !== undefined) {
                         const testSetup = provideTestSetup();
+                        let origObj = testSetup.origObj;
                         let watchedGraph = new WatchedGraph();
                         const proxy = watchedGraph.getProxyFor(withNestedFacade?new WatchedGraph().getProxyFor(testSetup.origObj):testSetup.origObj);
                         let reads: RecordedPropertyRead[] = [];
@@ -606,15 +608,15 @@ describe('WatchedGraph record read and watch it', () => {
 
                         if (mode === "With writes from inside") {
                             lastRead.onChange(changeHandler);
-                            testSetup.writerFn(proxy);
+                            testSetup.writerFn!(proxy);
                         } else if (mode === "With writes from outside") {
                             lastRead.onChange(changeHandler, true);
-                            testSetup.writerFn(origObj);
+                            testSetup.writerFn!(origObj);
                         } else if (mode === "with write from another WatchedGraph") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
-                            testSetup.writerFn(proxy2);
+                            testSetup.writerFn!(proxy2);
                         }
 
                         expect(changeHandler).toBeCalledTimes(0);
@@ -624,31 +626,34 @@ describe('WatchedGraph record read and watch it', () => {
             }
         }
         for(const withTrackOriginal of [false, true]) {
-            test(`${name}: Recorded reads are equal, when run twice${withTrackOriginal?` with track original`:""}`, () => {
-                // readerFns reads are equal?
-                const testSetup = provideTestSetup();
-                let watchedGraph = new WatchedGraph();
-                const proxy = watchedGraph.getProxyFor(testSetup.origObj);
-                let reads: RecordedRead[] = [];
-                watchedGraph.onAfterRead(r => {
-                    reads.push(r as RecordedPropertyRead);
-                    if(withTrackOriginal) {
-                        r.onChange(() => {}, true);
-                    }
-                });
+            if(provideTestSetup().readerFn) {
+                test(`${name}: Recorded reads are equal, when run twice${withTrackOriginal ? ` with track original` : ""}`, () => {
+                    // readerFns reads are equal?
+                    const testSetup = provideTestSetup();
+                    let watchedGraph = new WatchedGraph();
+                    const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+                    let reads: RecordedRead[] = [];
+                    watchedGraph.onAfterRead(r => {
+                        reads.push(r as RecordedPropertyRead);
+                        if (withTrackOriginal) {
+                            r.onChange(() => {
+                            }, true);
+                        }
+                    });
 
-                // 1st time:
-                testSetup.readerFn(proxy);
-                expect(reads.length).toBeGreaterThan(0);
-                const reads1 = reads;
+                    // 1st time:
+                    testSetup.readerFn!(proxy);
+                    expect(reads.length).toBeGreaterThan(0);
+                    const reads1 = reads;
 
-                // 2nd time:
-                reads = [];
-                testSetup.readerFn(proxy);
-                const reads2 = reads;
+                    // 2nd time:
+                    reads = [];
+                    testSetup.readerFn!(proxy);
+                    const reads2 = reads;
 
-                expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
-            })
+                    expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
+                })
+            }
         }
     }
 
@@ -711,7 +716,7 @@ describe('WatchedGraph record read and watch it', () => {
             origObj: obj,
             readerFn: (obj) => {read(obj.someDeep.someProp)},
             writerFn: (obj) => {obj.someDeep.someProp = "123"},
-            falseReadFn: (obj) => {read((obj as any).someOtherDeep);read((obj as any).someDeep.someOtherProp)}, // TODO
+            falseReadFn: (obj) => {read((obj as any).someOtherDeep);},
             falseWritesFn: (obj) => {(obj as any).someOtherDeep = "345";}
         }
     });
@@ -725,6 +730,13 @@ describe('WatchedGraph record read and watch it', () => {
             falseWritesFn: (obj) => {obj.someDeep.someProp="123" /* same value */}
         }
     });
+
+
+    testRecordReadAndWatch("Set deep property 3", () => {return {
+            origObj: {someDeep: {}},
+            writerFn: (obj) => {obj.someDeep.someProp = "123"},
+            falseReadFn: (obj) => {read((obj as any).someDeep.someOtherProp)},
+    }});
 
     testRecordReadAndWatch<string[]>("Read values of an array", () => {
         const obj: {} = {};
