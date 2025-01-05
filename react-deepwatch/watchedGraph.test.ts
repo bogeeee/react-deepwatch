@@ -517,7 +517,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void, writerFn: (obj: T) => void, falseReadsFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void, writerFn: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
@@ -591,13 +591,13 @@ describe('WatchedGraph record read and watch it', () => {
 
 
                     //falseReadFn:
-                    if (testSetup.falseReadsFn) {
+                    if (testSetup.falseReadFn) {
                         const testSetup = provideTestSetup();
                         let watchedGraph = new WatchedGraph();
                         const proxy = watchedGraph.getProxyFor(withNestedFacade?new WatchedGraph().getProxyFor(testSetup.origObj):testSetup.origObj);
                         let reads: RecordedPropertyRead[] = [];
                         watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
-                        testSetup.falseReadsFn!(proxy);
+                        testSetup.falseReadFn!(proxy);
                         expect(reads.length).toBeGreaterThan(0);
                         const lastRead = reads[reads.length - 1];
                         const changeHandler = vitest.fn(() => {
@@ -659,7 +659,7 @@ describe('WatchedGraph record read and watch it', () => {
             origObj: obj,
             readerFn: (obj) => {read(obj.someProp)},
             writerFn: (obj) => {obj.someProp = "123"},
-            falseReadsFn: (obj) => {read((obj as any).someOtherProp)}, // TODO
+            falseReadFn: (obj) => {read((obj as any).someOtherProp)},
         }
     });
 
@@ -683,6 +683,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+
     testRecordReadAndWatch("object.keys with delete", () => {
         const obj: Record<string, unknown> = {existingProp: "123"};
         return {
@@ -699,7 +700,7 @@ describe('WatchedGraph record read and watch it', () => {
             origObj: obj,
             readerFn: (obj) => {read(obj.someProp)},
             writerFn: (obj) => {deleteProperty(obj as any, "someProp")},
-            falseReadsFn: (obj) => {read((obj as any).someOtherProp)},
+            falseReadFn: (obj) => {read((obj as any).someOtherProp)},
             falseWritesFn: (obj) => {deleteProperty (obj as any, "anotherProp")}
         }
     });
@@ -710,7 +711,7 @@ describe('WatchedGraph record read and watch it', () => {
             origObj: obj,
             readerFn: (obj) => {read(obj.someDeep.someProp)},
             writerFn: (obj) => {obj.someDeep.someProp = "123"},
-            falseReadsFn: (obj) => {read((obj as any).someOtherDeep);read((obj as any).someDeep.someOtherProp)}, // TODO
+            falseReadFn: (obj) => {read((obj as any).someOtherDeep);read((obj as any).someDeep.someOtherProp)}, // TODO
             falseWritesFn: (obj) => {(obj as any).someOtherDeep = "345";}
         }
     });
@@ -757,7 +758,7 @@ describe('WatchedGraph record read and watch it', () => {
             origObj: obj,
             readerFn: (obj) => {...},
             writerFn: (obj) => () => {...},
-            falseReadsFn: (obj) => {},
+            falseReadFn: (obj) => {},
             falseWritesFn: (obj) => {}
         }
     });
