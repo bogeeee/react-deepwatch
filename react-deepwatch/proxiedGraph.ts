@@ -120,13 +120,13 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
         else {
             //@ts-ignore
             if (this.target[p] !== value) { // modify ?
-                this.rawWrite(p, value);
+                this.rawChange(p, value);
             }
         }
         return true
     }
 
-    protected rawWrite(p: string | symbol, newValue: any) {
+    protected rawChange(p: string | symbol, newValue: any) {
         //@ts-ignore
         this.target[p] = newValue
     }
