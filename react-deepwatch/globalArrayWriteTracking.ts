@@ -2,7 +2,9 @@ import {AfterWriteListener, DualUseTracker} from "./common";
 
 
 /**
- * Listeners for one array
+ * Listeners for one array.
+ * Note for specificity: There will be only one of the **change** events fired. The Recorded...Read.onChange handler will add the listeners to all possible candidates. It's this way around.
+ * {@link ObjectWriteListeners} are also subscribed on Arrays
  */
 class ArrayWriteListeners {
     afterUnspecificWrite = new Set<AfterWriteListener>

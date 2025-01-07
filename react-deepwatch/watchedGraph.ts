@@ -5,7 +5,7 @@ import {
     getWriteTrackerClassFor,
     objectIsEnhancedWithWriteTracker
 } from "./globalWriteTracking";
-import {getWriteListenersForArray, WriteTrackedArray} from "./globalArrayWriteTracking";
+import {getWriteListenersForArray, writeListenersForArray, WriteTrackedArray} from "./globalArrayWriteTracking";
 import {
     AfterChangeOwnKeysListener,
     AfterReadListener,
@@ -28,9 +28,9 @@ export abstract class RecordedRead {
      * @param listener
      * @param trackOriginal true to install a tracker on the non-proxied (by this facade) original object
      */
-    abstract onChange(listener: (newValue: unknown) => void, trackOriginal?: boolean): void;
+    abstract onChange(listener: () => void, trackOriginal?: boolean): void;
 
-    abstract offChange(listener: (newValue: unknown) => void): void;
+    abstract offChange(listener: () => void): void;
 }
 
 /**
@@ -49,11 +49,11 @@ export class RecordedValueRead extends RecordedRead{
         throw new Error("Cannot check if simple value (not on object) has changed.");
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
+    onChange(listener: () => void, trackOriginal = false) {
         throw new Error("Cannot listen for changes on simple value (not on object)");
     }
 
-    offChange(listener: (newValue: unknown) => void) {
+    offChange(listener: () => void) {
     }
 
     equals(other: RecordedRead) {
@@ -91,14 +91,20 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
 
     onChange(listener: (newValue: unknown) => void, trackOriginal=false) {
         if(trackOriginal) {
-            enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the propery of interest. See ObjectProxyHandler#installSetterTrap
+            enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the property of interest. See ObjectProxyHandler#installSetterTrap
         }
         getWriteListenersForObject(this.obj).afterChangeProperty_listeners.add(this.key, listener);
+        if(Array.isArray(this.obj)) {
+            getWriteListenersForArray(this.obj).afterUnspecificWrite.add(listener);
+        }
         debug_numberOfPropertyChangeListeners++;
     }
 
     offChange(listener: (newValue: unknown) => void) {
         writeListenersForObject.get(this.obj)?.afterChangeProperty_listeners.delete(this.key, listener);
+        if(Array.isArray(this.obj)) {
+            writeListenersForArray.get(this.obj)?.afterUnspecificWrite.delete(listener);
+        }
         debug_numberOfPropertyChangeListeners--;
     }
 

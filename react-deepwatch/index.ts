@@ -521,7 +521,7 @@ class Frame {
         this.cleanUpPropChangeListenerFns.push(() => read.offChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */));
     }
 
-    protected watchPropertyChange_changeListenerFn(newValue: unknown) {
+    protected watchPropertyChange_changeListenerFn() {
         if (currentRenderRun) {
             throw new Error("You must not modify a watched object during the render run.");
         }

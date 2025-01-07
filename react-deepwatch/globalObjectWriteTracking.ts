@@ -11,6 +11,10 @@ import {
     SetterFlags
 } from "./common";
 
+/**
+ * Note for specificity: There will be only one of the **change** events fired. The Recorded...Read.onChange handler will add the listeners to all possible candidates. It's this way around.
+ * Does not apply to setterInvoke.. These are fired in addition (not thought through for all situations)
+ */
 class ObjectWriteListeners {
     /**
      * For writes on **setters** (also if these are the same/unchanged values)
