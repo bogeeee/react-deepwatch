@@ -369,30 +369,55 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
     }
 
     values(): ArrayIterator<T> {
-        try {
-            return this._target.values();
-        }
-        finally {
-            this._fireAfterValuesRead();
-        }
+        const result = this._target.values();
+        this._fireAfterValuesRead();
+        return result;
     }
 
     [Symbol.iterator](): ArrayIterator<T> {
+        const result = this._target[Symbol.iterator]();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    get length(): number {
+        const result = this._target.length;
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    //@ts-ignore
+    unshift(...items): number {
+        const result = this._target.unshift(...items);
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    //@ts-ignore
+    forEach(...args: any[]) {
         try {
-            return this._target[Symbol.iterator]();
+            //@ts-ignore
+            return super.forEach(...args);
         }
         finally {
             this._fireAfterValuesRead();
         }
     }
 
-    get length(): number {
-        try {
-            return this._target.length;
-        }
-        finally {
-            this._fireAfterValuesRead();
-        }
+    //@ts-ignore
+    splice(...items): T[] {
+        //@ts-ignore
+        const result = this._target.splice(...items);
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    //@ts-ignore
+    pop(...args: any[]): T | undefined {
+        //@ts-ignore
+        const result = this._target.pop(...args);
+        this._fireAfterValuesRead();
+        return result;
     }
 
 }

@@ -518,7 +518,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void}) {
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean}) {
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
@@ -626,7 +626,7 @@ describe('WatchedGraph record read and watch it', () => {
             }
         }
         for(const withTrackOriginal of [false, true]) {
-            if(provideTestSetup().readerFn) {
+            if(provideTestSetup().readerFn && !provideTestSetup().skipTestReadsAreEqual) {
                 test(`${name}: Recorded reads are equal, when run twice${withTrackOriginal ? ` with track original` : ""}`, () => {
                     // readerFns reads are equal?
                     const testSetup = provideTestSetup();
@@ -678,26 +678,29 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
-    testRecordReadAndWatch("object.keys", () => {
-        const obj: Record<string, unknown> = {existingProp: "123"};
-        return {
-            origObj: obj,
-            readerFn: (obj) => {read(Object.keys(obj))},
-            writerFn: (obj) => {obj.someOtherProp = "456"},
-            falseWritesFn: (obj) => {obj.existingProp="new";}
-        }
-    });
+    for(const mode of [{name: "Object.keys", readerFn: (obj: object) => read(Object.keys(obj))}, {name: "For...in", readerFn: (obj: object) => {for(const key in obj) read(key)}}]) {
+
+        testRecordReadAndWatch(`${mode.name}`, () => {
+            const obj: Record<string, unknown> = {existingProp: "123"};
+            return {
+                origObj: obj,
+                readerFn: mode.readerFn,
+                writerFn: (obj) => {obj.someOtherProp = "456"},
+                falseWritesFn: (obj) => {obj.existingProp="new";}
+            }
+        });
 
 
-    testRecordReadAndWatch("object.keys with delete", () => {
-        const obj: Record<string, unknown> = {existingProp: "123"};
-        return {
-            origObj: obj,
-            readerFn: (obj) => {read(Object.keys(obj))},
-            writerFn: (obj) => {deleteProperty(obj, "existingProp" as any)},
-            falseWritesFn: (obj) => {obj.existingProp="new"; deleteProperty (obj as any, "anotherProp")}
-        }
-    });
+        testRecordReadAndWatch(`${mode.name} with delete`, () => {
+            const obj: Record<string, unknown> = {existingProp: "123"};
+            return {
+                origObj: obj,
+                readerFn: mode.readerFn,
+                writerFn: (obj) => {deleteProperty(obj, "existingProp" as any)},
+                falseWritesFn: (obj) => {obj.existingProp="new"; deleteProperty (obj as any, "anotherProp")}
+            }
+        });
+    }
 
     testRecordReadAndWatch("Delete object property", () => {
         const obj: {someProp?: string} = {someProp: "123"};
@@ -733,7 +736,7 @@ describe('WatchedGraph record read and watch it', () => {
 
 
     testRecordReadAndWatch("Set deep property 3", () => {return {
-            origObj: {someDeep: {}},
+            origObj: {someDeep: {}} as any,
             writerFn: (obj) => {obj.someDeep.someProp = "123"},
             falseReadFn: (obj) => {read((obj as any).someDeep.someOtherProp)},
     }});
@@ -758,10 +761,42 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    for(const mode of [{name: "Object.keys", readerFn: (obj: Array<unknown>) => read(Object.keys(obj))}, {name: "For...in", readerFn: (obj: Array<unknown>) => {for(const key in obj) read(key)}}, {name: "For...of", readerFn: (obj: Array<unknown>) => {for(const val of obj) read(val)}}, {name: "forEach", readerFn: (obj: Array<unknown>) => obj.forEach(v => read(v))}]) {
+
+        for(const writerFn of [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => {arr[1] = 123}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)] ) {
+            testRecordReadAndWatch(`Arrays with ${mode.name} with ${fnToString(writerFn)}`, () => {
+                return {
+                    origObj: ["a", 1, 2, {}],
+                    readerFn: mode.readerFn,
+                    writerFn
+                }
+            });
+        }
+
+        testRecordReadAndWatch(`Arrays with ${mode.name} 2`, () => {
+            return {
+                origObj: ["a", 1, 2, {}],
+                readerFn: mode.readerFn,
+                falseWritesFn: (arr) => {arr[0] = "a";}
+            }
+        });
+    }
+
     // TODO: non enumerable properties
 
-    // TODO: delete on arrays
+
     // TODO: arrays with gaps
+    // TODO: arrays with read+write methods (at the same time): unshift, splice
+    for(const readWriteFn of [(arr: any[]) => arr.pop()] ) {
+        testRecordReadAndWatch(`Arrays with Read-Write method: ${fnToString(readWriteFn)}`, () => {
+            return {
+                origObj: ["a", 1, 2, {}],
+                readerFn: readWriteFn,
+                writerFn: readWriteFn,
+                skipTestReadsAreEqual: true
+            }
+        });
+    }
 
     /* Template:
     testRecordReadAndWatch("xxx", () => {
@@ -776,3 +811,7 @@ describe('WatchedGraph record read and watch it', () => {
     });
     */
 });
+
+function fnToString(fn: (args: unknown[]) => unknown) {
+    return fn.toString().replace(/\s/g,"");
+}

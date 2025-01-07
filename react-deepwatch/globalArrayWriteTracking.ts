@@ -31,22 +31,18 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
         writeListenersForArray.get(this._target)?.afterUnspecificWrite.forEach(l => l(this._target));
     }
 
-    forEach(...args: any[]) {
-        try {
-            return super.forEach.apply(this, args as any); // this.values.forEach(...args). Call it on values because the
-        }
-        finally {
-            this._fireAfterUnspecificWrite();
-        }
+    push(...items: any[]): number {
+
+        const result = super.push(...items as any);
+        this._fireAfterUnspecificWrite();
+        return result;
     }
 
-    push(...items: any[]): number {
-        try {
-            return super.push(...items as any);
-        }
-        finally {
-            this._fireAfterUnspecificWrite();
-        }
+    pop(...args: any[]) {
+        //@ts-ignore
+        const result = super.pop(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
     }
 
     /**
@@ -61,5 +57,57 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
      */
     get ["constructor"]() {
         return Array;
+    }
+
+    shift(...args: any[]): T | undefined {
+        //@ts-ignore
+        const result = super.shift(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    //@ts-ignore
+    sort(...args: any[]): Array<T> {
+        //@ts-ignore
+        const result = super.sort(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    reverse(...args: any[]): T[] {
+        //@ts-ignore
+        const result = super.reverse(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    //@ts-ignore
+    copyWithin(...args: any[]): Array<T> {
+        //@ts-ignore
+        const result = super.copyWithin(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    //@ts-ignore
+    fill(...args: any[]): Array<T> {
+        //@ts-ignore
+        const result = super.fill(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    splice(...args: any[]): T[] {
+        //@ts-ignore
+        const result = super.splice(...args);
+        this._fireAfterUnspecificWrite();
+        return result;
+    }
+
+    //@ts-ignore
+    unshift(...items): number {
+        const result = super.unshift(...items);
+        this._fireAfterUnspecificWrite();
+        return result;
     }
 }
