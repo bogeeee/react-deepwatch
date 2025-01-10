@@ -267,7 +267,7 @@ export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]
  * - record read and make several snapshots (when load is called) and compare exactly those reads
  */
 export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
-
+    // ** Configuration**
     /**
      * Watches also writes that are not made through a proxy of this WatchedGraph by installing a setter (property accessor) on each of the desired properties
      * Works only for **individual** properties which you are explicitly listening on, and not on the whole Graph.
@@ -275,6 +275,8 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
      *
      */
     public watchWritesFromOutside = false; //
+
+    trackReadsOnPrototype = false;
 
     // *** State: ****
 
@@ -399,16 +401,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
         return result;
     }
 
-    //@ts-ignore
-    forEach(...args: any[]) {
-        try {
-            //@ts-ignore
-            return super.forEach(...args);
-        }
-        finally {
-            this._fireAfterValuesRead();
-        }
-    }
+    //forEach(...args: any[]) // Already reads "length" an thererfore triggers the read
 
     //@ts-ignore
     splice(...items): T[] {
@@ -492,6 +485,11 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
 
     rawRead(key: ObjKey) {
         const result = super.rawRead(key);
+        if(!this.graph.trackReadsOnPrototype) {
+            if(Object.getOwnPropertyDescriptor(this.target, key) === undefined && getPropertyDescriptor(this.target,key ) !== undefined) { // Property is on prototype only ?
+                return result;
+            }
+        }
         this.fireAfterRead(new RecordedPropertyRead(key, result)); // Inform listeners
         return result;
     }
