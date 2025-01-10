@@ -134,10 +134,16 @@ export class RecordedOwnKeysRead extends RecordedReadOnProxiedObject{
             enhanceWithWriteTracker(this.obj);
         }
         getWriteListenersForObject(this.obj).afterChangeOwnKeys_listeners.add(listener);
+        if(Array.isArray(this.obj)) {
+            getWriteListenersForArray(this.obj).afterUnspecificWrite.add(listener);
+        }
     }
 
     offChange(listener: AfterChangeOwnKeysListener) {
         writeListenersForObject.get(this.obj)?.afterChangeOwnKeys_listeners.delete(listener);
+        if(Array.isArray(this.obj)) {
+            writeListenersForArray.get(this.obj)?.afterUnspecificWrite.delete(listener);
+        }
     }
 
     equals(other: RecordedRead) {
