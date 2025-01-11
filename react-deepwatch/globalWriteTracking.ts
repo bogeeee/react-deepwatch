@@ -14,7 +14,7 @@ const enhancedObjects = new WeakSet<object>();
 /**
  * Register them here
  */
-export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedSet/* TODO: Map */]);
+export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedSet<unknown>/* TODO: Map */]);
 
 /**
  * Maps the original class to the watcher class

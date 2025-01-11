@@ -5,7 +5,7 @@ export type AfterReadListener = (read: RecordedRead) => void;
 export type AfterWriteListener = () => void;
 export type AfterChangeOwnKeysListener = () => void;
 export type Clazz = {
-    new(...args: unknown[]): unknown
+    new(...args: any[]): unknown
 }
 
 /**
