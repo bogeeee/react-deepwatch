@@ -160,11 +160,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         this.target[key] = value; // Set value again. this should call the setter trap
 
         // There was no setter trap yet. This means that the key is new. Inform those listeners:
-        const writeListenersForTarget = writeListenersForObject.get(this.target);
-        if(writeListenersForTarget !== undefined) {
-            const ownKeys = Reflect.ownKeys(this.target);
-            writeListenersForTarget.afterChangeOwnKeys_listeners.forEach(l => l());
-        }
+        const writeListenersForTarget = writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l());
 
         return true;
     }
