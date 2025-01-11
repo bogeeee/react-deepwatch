@@ -177,7 +177,7 @@ export class ArrayProxyHandler implements ProxyHandler<object> {
 
         // Inform the listeners:
         /*
-        TODO: call these more fine granular listeners instead
+        TODO: call these more fine granular listeners instead. Same in Same in WatchedGraphHandler#onChange
         const writeListeners = writeListenersForObject.get(this.target);
         writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners;
         if(isNewKey) {

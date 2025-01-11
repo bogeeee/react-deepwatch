@@ -504,10 +504,16 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         const isNewProperty = getPropertyDescriptor(this.target, key) === undefined;
         super.rawChange(key, newValue);
         if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
-            const writeListeners = writeListenersForObject.get(this.target);
-            writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners;
-            if(isNewProperty) {
-                writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l());
+            if(Array.isArray(this.target)) {
+                // TODO: Remove this branch and use the more specific one. Same in ArrayProxyHandler#set
+                writeListenersForArray.get(this.target)?.afterUnspecificWrite.forEach(l => l());
+            }
+            else {
+                const writeListeners = writeListenersForObject.get(this.target);
+                writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners;
+                if (isNewProperty) {
+                    writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l());
+                }
             }
         }
     }
