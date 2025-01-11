@@ -73,7 +73,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
 
             if(origSetter !== undefined) {
                 origSetter.apply(target, [newValue]);  // call the setter
-                writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l()); // call listeners
                 return;
             }
 
@@ -140,7 +140,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         const writeListenersForTarget = writeListenersForObject.get(this.target);
         if(writeListenersForTarget !== undefined) {
             const ownKeys = Reflect.ownKeys(this.target);
-            writeListenersForTarget.afterChangeOwnKeys_listeners.forEach(l => l(ownKeys));
+            writeListenersForTarget.afterChangeOwnKeys_listeners.forEach(l => l());
         }
 
         return true;

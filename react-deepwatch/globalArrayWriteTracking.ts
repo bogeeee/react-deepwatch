@@ -32,7 +32,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
 
 
     protected _fireAfterUnspecificWrite() {
-        writeListenersForArray.get(this._target)?.afterUnspecificWrite.forEach(l => l(this._target));
+        writeListenersForArray.get(this._target)?.afterUnspecificWrite.forEach(l => l());
     }
 
     push(...items: any[]): number {

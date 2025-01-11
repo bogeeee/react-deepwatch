@@ -30,7 +30,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
 
 
     protected _fireAfterUnspecificWrite() {
-        writeListenersForSet.get(this._target)?.afterUnspecificWrite.forEach(l => l(this._target));
+        writeListenersForSet.get(this._target)?.afterUnspecificWrite.forEach(l => l());
     }
 
     /**

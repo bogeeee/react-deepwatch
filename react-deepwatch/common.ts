@@ -2,8 +2,8 @@ import {RecordedRead} from "./watchedGraph";
 
 export type ObjKey = string | symbol;
 export type AfterReadListener = (read: RecordedRead) => void;
-export type AfterWriteListener = (value: unknown) => void; // TODO: it is strange, that here's only one param: value
-export type AfterChangeOwnKeysListener = (value: ArrayLike<string | symbol>) => void;
+export type AfterWriteListener = () => void;
+export type AfterChangeOwnKeysListener = () => void;
 export type Clazz = {
     new(...args: unknown[]): unknown
 }

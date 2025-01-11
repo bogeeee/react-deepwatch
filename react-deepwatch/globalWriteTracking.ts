@@ -80,7 +80,7 @@ export function deleteProperty<O extends object>(obj: O, key: keyof O) {
 
     const result = delete obj[key];
     if(doesExist) {
-        writeListenersForObject.get(obj)?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(obj)));
+        writeListenersForObject.get(obj)?.afterChangeOwnKeys_listeners.forEach(l => l());
     }
 
     return result;

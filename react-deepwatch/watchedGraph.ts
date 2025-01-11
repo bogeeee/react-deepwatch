@@ -89,7 +89,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         return this.obj[this.key] !== this.value;
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOriginal=false) {
+    onChange(listener: () => void, trackOriginal=false) {
         if(trackOriginal) {
             enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the property of interest. See ObjectProxyHandler#installSetterTrap
         }
@@ -100,7 +100,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         debug_numberOfPropertyChangeListeners++;
     }
 
-    offChange(listener: (newValue: unknown) => void) {
+    offChange(listener: () => void) {
         writeListenersForObject.get(this.obj)?.afterChangeProperty_listeners.delete(this.key, listener);
         if(Array.isArray(this.obj)) {
             writeListenersForArray.get(this.obj)?.afterUnspecificWrite.delete(listener);
@@ -168,14 +168,14 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
         this.values = values;
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOriginal =false) {
+    onChange(listener: () => void, trackOriginal =false) {
         if(trackOriginal) {
             enhanceWithWriteTracker(this.origObj);
         }
         getWriteListenersForArray(this.origObj).afterUnspecificWrite.add(listener);
     }
 
-    offChange(listener: (newValue: unknown) => void) {
+    offChange(listener: () => void) {
         getWriteListenersForArray(this.origObj).afterUnspecificWrite.delete(listener);
     }
     
@@ -222,11 +222,11 @@ export class RecordedSet_has extends RecordedRead {
         throw new Error("TODO");
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
+    onChange(listener: () => void, trackOriginal = false) {
         throw new Error("TODO");
     }
 
-    offChange(listener: (newValue: unknown) => void) {
+    offChange(listener: () => void) {
         throw new Error("TODO");
     }
 
@@ -249,11 +249,11 @@ export class RecordedSet_values extends RecordedRead {
         throw new Error("TODO");
     }
 
-    onChange(listener: (newValue: unknown) => void, trackOriginal = false) {
+    onChange(listener: () => void, trackOriginal = false) {
         throw new Error("TODO");
     }
 
-    offChange(listener: (newValue: unknown) => void) {
+    offChange(listener: () => void) {
         throw new Error("TODO");
     }
 
