@@ -3,7 +3,7 @@
 
 import {RecordedReadOnProxiedObject, WatchedGraphHandler} from "./watchedGraph";
 import {MapSet} from "./Util";
-import {WriteTrackedArray} from "./globalArrayWriteTracking";
+import {ArrayProxyHandler, WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterWriteListener, Clazz, ObjKey} from "./common";
 import {ObjectProxyHandler, writeListenersForObject} from "./globalObjectWriteTracking";
 import {WriteTrackedSet} from "./globalSetWriteTracking";
@@ -14,7 +14,7 @@ const enhancedObjects = new WeakSet<object>();
 /**
  * Register them here
  */
-export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedArray, WriteTrackedSet/* TODO: Map */]);
+export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedSet/* TODO: Map */]);
 
 /**
  * Maps the original class to the watcher class
@@ -45,7 +45,11 @@ export function enhanceWithWriteTracker(obj: object) {
     }
 
     let watcherClass = getWriteTrackerClassFor(obj);
-    if(watcherClass !== undefined) {
+    if(Array.isArray(obj)) {
+        const proxy = new ArrayProxyHandler(obj).proxy;
+        Object.setPrototypeOf(obj, proxy);
+    }
+    else if(watcherClass !== undefined) {
         Object.setPrototypeOf(obj, watcherClass.prototype);
     }
     else {
