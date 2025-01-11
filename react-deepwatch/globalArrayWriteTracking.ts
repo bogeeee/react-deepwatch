@@ -35,12 +35,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
         writeListenersForArray.get(this._target)?.afterUnspecificWrite.forEach(l => l());
     }
 
-    push(...items: any[]): number {
-
-        const result = super.push(...items as any);
-        this._fireAfterUnspecificWrite();
-        return result;
-    }
+    //push(...items: any[]): number //already calls set
 
     pop(...args: any[]) {
         //@ts-ignore
