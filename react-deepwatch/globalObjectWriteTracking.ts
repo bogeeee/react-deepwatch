@@ -4,7 +4,7 @@
 import {MapSet} from "./Util";
 import {
     AfterChangeOwnKeysListener,
-    AfterWriteListener,
+    AfterWriteListener, Clazz,
     getPropertyDescriptor,
     GetterFlags,
     ObjKey,
@@ -35,15 +35,23 @@ export function getWriteListenersForObject(obj: object) {
 
 export class ObjectProxyHandler implements ProxyHandler<object> {
     target: object;
+    supervisorClass?: Clazz
     origPrototype: object | null;
+
     proxy: object;
 
-    constructor(target: object) {
+    constructor(target: object, supervisorClass?: Clazz) {
         this.target = target;
+        this.supervisorClass = supervisorClass;
         this.origPrototype = Object.getPrototypeOf(target);
 
 
-        Object.getOwnPropertyNames(target).forEach(p => this.installSetterTrap(p));
+        Object.getOwnPropertyNames(target).forEach(key => {
+            if(key === "length" && Array.isArray(target)) {
+                return; // Leave the length property as is. It won't be set directly anyway
+            }
+            this.installSetterTrap(key)
+        });
 
         // Create proxy:
         //const targetForProxy = {}; // The virtual way
@@ -62,7 +70,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         let origOwnDescriptor = Object.getOwnPropertyDescriptor(target, key);
         if(origOwnDescriptor !== undefined) {
             if(origOwnDescriptor.configurable !== true) {
-                throw new Error("Cannot delete non- 'configurable' property.");
+                throw new Error("Cannot delete non- 'configurable' property:" + String(key));
             }
             //@ts-ignore
             delete target[key]; // delete the old, or the following Object.defineProperty will conflict
@@ -112,6 +120,21 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         if(receiver !== this.target) {
             throw new Error("Invalid state. Get was called on a different object than this write-tracker-proxy (which is set as the prototype) is for. Did you clone the object, resulting in shared prototypes?")
         }
+
+        // Check for and use supervisor class:
+        const supervisorClass = this.supervisorClass
+        if (supervisorClass !== undefined) {
+            let propOnSupervisor = Object.getOwnPropertyDescriptor(supervisorClass.prototype, key);
+            if (propOnSupervisor !== undefined) { // Supervisor class is responsible for the property (or method) ?
+                //@ts-ignore
+                if (propOnSupervisor.get) { // Prop is a getter?
+                    return propOnSupervisor.get.apply(this.target)
+                } else if (propOnSupervisor.value) { // Prop is a value, meaning a function. (Supervisors don't have fields)
+                    return supervisorClass.prototype[key];
+                }
+            }
+        }
+
 
         // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the actual tinkered prototype chain which has this proxy in there and calls get (endless recursion)
         const propDesc = getPropertyDescriptor(this.target, key)

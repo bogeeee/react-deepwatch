@@ -3,7 +3,7 @@
 
 import {RecordedReadOnProxiedObject, WatchedGraphHandler} from "./watchedGraph";
 import {MapSet} from "./Util";
-import {ArrayProxyHandler, WriteTrackedArray} from "./globalArrayWriteTracking";
+import {WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterWriteListener, Clazz, ObjKey} from "./common";
 import {ObjectProxyHandler, writeListenersForObject} from "./globalObjectWriteTracking";
 import {WriteTrackedSet} from "./globalSetWriteTracking";
@@ -45,15 +45,11 @@ export function enhanceWithWriteTracker(obj: object) {
     }
 
     let watcherClass = getWriteTrackerClassFor(obj);
-    if(Array.isArray(obj)) {
-        const proxy = new ArrayProxyHandler(obj).proxy;
-        Object.setPrototypeOf(obj, proxy);
-    }
-    else if(watcherClass !== undefined) {
+    if(watcherClass !== undefined) {
         Object.setPrototypeOf(obj, watcherClass.prototype);
     }
     else {
-        const proxy = new ObjectProxyHandler(obj).proxy;
+        const proxy = new ObjectProxyHandler(obj, Array.isArray(obj)?WriteTrackedArray:undefined).proxy;
         Object.setPrototypeOf(obj, proxy);
     }
     enhancedObjects.add(obj);
