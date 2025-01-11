@@ -505,9 +505,9 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         super.rawChange(key, newValue);
         if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
             const writeListeners = writeListenersForObject.get(this.target);
-            writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners;
+            writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners;
             if(isNewProperty) {
-                writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(this.target)));
+                writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l());
             }
         }
     }
@@ -520,7 +520,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         const result = super.deleteProperty(target, key);
         if(doesExists) {
             if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
-                writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l(Reflect.ownKeys(this.target)));
+                writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l());
             }
         }
         return result;

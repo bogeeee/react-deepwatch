@@ -86,7 +86,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             if (newValue !== currentValue) { // modify ?
                 //@ts-ignore
                 currentValue = newValue;
-                writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l(newValue)); // call listeners
+                writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners
             }
         }
         (newSetter as SetterFlags).origHadSetter = origSetter !== undefined;
