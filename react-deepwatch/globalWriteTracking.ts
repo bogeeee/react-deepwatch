@@ -4,7 +4,7 @@
 import {RecordedReadOnProxiedObject, WatchedGraphHandler} from "./watchedGraph";
 import {MapSet} from "./Util";
 import {WriteTrackedArray} from "./globalArrayWriteTracking";
-import {AfterWriteListener, Clazz, ObjKey} from "./common";
+import {AfterWriteListener, Clazz, ObjKey, runAndCallListenersOnce_after} from "./common";
 import {ObjectProxyHandler, writeListenersForObject} from "./globalObjectWriteTracking";
 import {WriteTrackedSet} from "./globalSetWriteTracking";
 
@@ -65,19 +65,19 @@ export function deleteProperty<O extends object>(obj: O, key: keyof O) {
         return delete obj[key];
     }
 
-    //TODO: implement for arrays
+    return runAndCallListenersOnce_after(obj, (callListeners) => {
+        const doesExist = Object.getOwnPropertyDescriptor(obj, key) !== undefined;
 
-    const doesExist = Object.getOwnPropertyDescriptor(obj, key) !== undefined;
+        if (doesExist) {
+            //@ts-ignore
+            obj[key] = undefined; // Set to undefined first, so property change listeners will get informed
+        }
 
-    if(doesExist) {
-        //@ts-ignore
-        obj[key] = undefined; // Set to undefined first, so property change listeners will get informed
-    }
+        const result = delete obj[key];
+        if (doesExist) {
+            callListeners(writeListenersForObject.get(obj)?.afterChangeOwnKeys_listeners);
+        }
 
-    const result = delete obj[key];
-    if(doesExist) {
-        writeListenersForObject.get(obj)?.afterChangeOwnKeys_listeners.forEach(l => l());
-    }
-
-    return result;
+        return result;
+    });
 }

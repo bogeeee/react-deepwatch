@@ -4,7 +4,7 @@
 import {MapSet} from "./Util";
 import {
     AfterChangeOwnKeysListener,
-    AfterWriteListener, Clazz,
+    AfterWriteListener, runAndCallListenersOnce_after, Clazz,
     getPropertyDescriptor,
     GetterFlags,
     ObjKey,
@@ -77,25 +77,27 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         }
 
         const newSetter=  (newValue: any) => {
-            const writeListenersForTarget = writeListenersForObject.get(target);
+            runAndCallListenersOnce_after(target, (callListeners) => {
+                const writeListenersForTarget = writeListenersForObject.get(target);
 
-            if(origSetter !== undefined) {
-                origSetter.apply(target, [newValue]);  // call the setter
-                writeListenersForTarget?.afterSetterInvoke_listeners.get(key)?.forEach(l => l()); // call listeners
-                return;
-            }
+                if(origSetter !== undefined) {
+                    origSetter.apply(target, [newValue]);  // call the setter
+                    callListeners(writeListenersForTarget?.afterSetterInvoke_listeners.get(key));
+                    return;
+                }
 
-            if(origGetter !== undefined) {
-                currentValue = origGetter.apply(target);  // call the getter. Is this a good idea to refresh the value here?
-                throw new TypeError("Target originally had a getter and no setter but the property is set.");
-            }
+                if(origGetter !== undefined) {
+                    currentValue = origGetter.apply(target);  // call the getter. Is this a good idea to refresh the value here?
+                    throw new TypeError("Target originally had a getter and no setter but the property is set.");
+                }
 
-            //@ts-ignore
-            if (newValue !== currentValue) { // modify ?
                 //@ts-ignore
-                currentValue = newValue;
-                writeListenersForTarget?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners
-            }
+                if (newValue !== currentValue) { // modify ?
+                    //@ts-ignore
+                    currentValue = newValue;
+                    callListeners(writeListenersForTarget?.afterChangeProperty_listeners.get(key))
+                }
+            });
         }
         (newSetter as SetterFlags).origHadSetter = origSetter !== undefined;
 
@@ -153,14 +155,17 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             throw new Error("Invalid state. Set was called on a different object than this write-tracker-proxy (which is set as the prototype) is for. Did you clone the object, resulting in shared prototypes?")
         }
 
-        // if this method got called, there is no setter trap installed yet
+        runAndCallListenersOnce_after(this.target, (callListeners) => {
 
-        this.installSetterTrap(key);
-        //@ts-ignore
-        this.target[key] = value; // Set value again. this should call the setter trap
+            // if this "set" method got called, there is no setter trap installed yet
+            this.installSetterTrap(key);
 
-        // There was no setter trap yet. This means that the key is new. Inform those listeners:
-        const writeListenersForTarget = writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l());
+            //@ts-ignore
+            this.target[key] = value; // Set value again. this should call the setter trap
+
+            // There was no setter trap yet. This means that the key is new. Inform those listeners:
+            callListeners(writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners);
+        });
 
         return true;
     }

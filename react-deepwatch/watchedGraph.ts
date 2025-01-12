@@ -11,7 +11,7 @@ import {
     AfterReadListener,
     AfterWriteListener,
     Clazz,
-    DualUseTracker, getPropertyDescriptor,
+    DualUseTracker, getPropertyDescriptor, runAndCallListenersOnce_after,
     ObjKey
 } from "./common";
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
@@ -501,35 +501,37 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     }
 
     protected rawChange(key: string | symbol, newValue: any) {
-        const isNewProperty = getPropertyDescriptor(this.target, key) === undefined;
-        super.rawChange(key, newValue);
-        if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
-            if(Array.isArray(this.target)) {
-                // TODO: Remove this branch and use the more specific one. Same in ArrayProxyHandler#set
-                writeListenersForArray.get(this.target)?.afterUnspecificWrite.forEach(l => l());
-            }
-            else {
+        runAndCallListenersOnce_after(this.target, (callListeners) => {
+            const isNewProperty = getPropertyDescriptor(this.target, key) === undefined;
+            super.rawChange(key, newValue);
+            if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
+                if(Array.isArray(this.target)) {
+                    callListeners(writeListenersForArray.get(this.target)?.afterUnspecificWrite);
+                }
                 const writeListeners = writeListenersForObject.get(this.target);
-                writeListeners?.afterChangeProperty_listeners.get(key)?.forEach(l => l()); // call listeners;
+                callListeners(writeListeners?.afterChangeProperty_listeners.get(key));
                 if (isNewProperty) {
-                    writeListeners?.afterChangeOwnKeys_listeners.forEach(l => l());
+                    callListeners(writeListeners?.afterChangeOwnKeys_listeners);
                 }
             }
-        }
+        });
+
     }
 
     deleteProperty(target: object, key: string | symbol): boolean {
-        const doesExists = Object.getOwnPropertyDescriptor(this.target, key) !== undefined;
-        if(doesExists) {
-            this.set(target, key, undefined, this.proxy); // Set to undefined first, so property change listeners will get informed
-        }
-        const result = super.deleteProperty(target, key);
-        if(doesExists) {
-            if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
-                writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners.forEach(l => l());
+        return runAndCallListenersOnce_after(this.target, (callListeners) => {
+            const doesExists = Object.getOwnPropertyDescriptor(this.target, key) !== undefined;
+            if (doesExists) {
+                this.set(target, key, undefined, this.proxy); // Set to undefined first, so property change listeners will get informed
             }
-        }
-        return result;
+            const result = super.deleteProperty(target, key);
+            if (doesExists) {
+                if (!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
+                    callListeners(writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners);
+                }
+            }
+            return result;
+        });
     }
 
     ownKeys(target: object): ArrayLike<string | symbol> {
