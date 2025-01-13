@@ -8,7 +8,7 @@ import {
 } from "./watchedGraph";
 import _ from "underscore"
 import {arraysAreEqualsByPredicateFn} from "./Util";
-import {ObjKey} from "./common";
+import {Clazz, ObjKey} from "./common";
 import {deleteProperty, enhanceWithWriteTracker} from "./globalWriteTracking";
 import {ProxiedGraph} from "./proxiedGraph";
 
@@ -38,7 +38,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean}) {
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean, pickReader?: Clazz}) {
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
@@ -58,7 +58,7 @@ describe('WatchedGraph record read and watch it', () => {
                         reads = [];
                         testSetup.readerFn!(proxy);
                         expect(reads.length).toBeGreaterThan(0);
-                        const lastRead = reads[reads.length - 1];
+                        const lastRead = getLastRead(reads, testSetup);
 
                         const changeHandler = vitest.fn(() => {
                             const i = 0; // set breakpoint here
@@ -89,7 +89,7 @@ describe('WatchedGraph record read and watch it', () => {
                         watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
                         reads = [];
                         testSetup.readerFn!(proxy);
-                        const lastRead = reads[reads.length - 1];
+                        const lastRead = getLastRead(reads, testSetup);
 
                         const changeHandler = vitest.fn(() => {
                             const i = 0; // set breakpoint here
@@ -121,7 +121,7 @@ describe('WatchedGraph record read and watch it', () => {
                         watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
                         testSetup.falseReadFn!(proxy);
                         expect(reads.length).toBeGreaterThan(0);
-                        const lastRead = reads[reads.length - 1];
+                        const lastRead = getLastRead(reads, testSetup);
                         const changeHandler = vitest.fn(() => {
                             const i = 0;// set breakpoint here
                         });
@@ -174,6 +174,12 @@ describe('WatchedGraph record read and watch it', () => {
                     expect(recordedReadsArraysAreEqual(reads1, reads2)).toBeTruthy();
                 })
             }
+        }
+
+        function getLastRead(reads: RecordedRead[], testSetup: ReturnType<typeof provideTestSetup>) {
+            const r = testSetup.pickReader?reads.filter(r => r instanceof testSetup.pickReader!):reads;
+            expect(r.length).toBeGreaterThan(0);
+            return r[r.length - 1];
         }
     }
 
@@ -281,9 +287,10 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
-    for(const mode of [{name: "Object.keys", readerFn: (obj: Array<unknown>) => read(Object.keys(obj))}, {name: "For...in", readerFn: (obj: Array<unknown>) => {for(const key in obj) read(key)}}, {name: "For...of", readerFn: (obj: Array<unknown>) => {for(const val of obj) read(val)}}, {name: "forEach", readerFn: (obj: Array<unknown>) => obj.forEach(v => read(v))}]) {
+    // Key iteration:
+    for(const mode of [{name: "Object.keys", readerFn: (obj: Array<unknown>) => read(Object.keys(obj))}, {name: "For...in", readerFn: (obj: Array<unknown>) => {for(const key in obj) read(key)}}]) {
 
-        for(const writerFn of [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => {arr[1] = 123}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)] ) {
+        for(const writerFn of [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)] ) {
             testRecordReadAndWatch(`Arrays with ${mode.name} with ${fnToString(writerFn)}`, () => {
                 return {
                     origObj: ["a", 1, 2, {}],
@@ -293,7 +300,7 @@ describe('WatchedGraph record read and watch it', () => {
             });
         }
 
-        testRecordReadAndWatch(`Arrays with ${mode.name} 2`, () => {
+        testRecordReadAndWatch(`Arrays with ${mode.name} with false writes`, () => {
             return {
                 origObj: ["a", 1, 2, {}],
                 readerFn: mode.readerFn,
@@ -301,6 +308,43 @@ describe('WatchedGraph record read and watch it', () => {
             }
         });
     }
+
+    const arrayChangeFns = [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => {arr[1] = 123}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)];
+    // Value iteration:
+    for(const mode of [{name: "For...of", readerFn: (obj: Array<unknown>) => {for(const val of obj) read(val)}}]) {
+        for(const writerFn of arrayChangeFns ) {
+            testRecordReadAndWatch(`Arrays with ${mode.name} with ${fnToString(writerFn)}`, () => {
+                return {
+                    origObj: ["a", 1, 2, {}],
+                    readerFn: mode.readerFn,
+                    writerFn
+                }
+            });
+        }
+
+        testRecordReadAndWatch(`Arrays with ${mode.name} with false writes`, () => {
+            return {
+                origObj: ["a", 1, 2, {}],
+                readerFn: mode.readerFn,
+                falseWritesFn: (arr) => {arr[0] = "a";}
+            }
+        });
+    }
+    for (const writerFn of arrayChangeFns) {
+        testRecordReadAndWatch(`Arrays with forEach with ${fnToString(writerFn)}`, () => {
+            return {
+                origObj: ["a", 1, 2, {}],
+                readerFn: (obj: Array<unknown>) => obj.forEach(v => read(v)  ),
+                writerFn,
+                pickReader: RecordedArrayValuesRead
+            }
+        });
+    }
+
+
+
+
+
 
     // TODO: non enumerable properties
 
