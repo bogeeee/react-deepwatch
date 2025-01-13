@@ -10,6 +10,7 @@ import {
     ObjKey,
     SetterFlags
 } from "./common";
+import {writeListenersForArray} from "./globalArrayWriteTracking";
 
 /**
  * Note for specificity: There will be only one of the **change** events fired. The Recorded...Read.onChange handler will add the listeners to all possible candidates. It's this way around.
@@ -95,6 +96,11 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                 if (newValue !== currentValue) { // modify ?
                     //@ts-ignore
                     currentValue = newValue;
+
+                    // Call listeners:
+                    if(Array.isArray(target)) {
+                        callListeners(writeListenersForArray.get(target)?.afterUnspecificWrite);
+                    }
                     callListeners(writeListenersForTarget?.afterChangeProperty_listeners.get(key))
                 }
             });

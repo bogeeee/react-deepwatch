@@ -172,11 +172,13 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
         if(trackOriginal) {
             enhanceWithWriteTracker(this.origObj);
         }
+        getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.add(listener);
         getWriteListenersForArray(this.origObj).afterUnspecificWrite.add(listener);
     }
 
     offChange(listener: () => void) {
         getWriteListenersForArray(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.delete(listener);
     }
     
     equals(other: RecordedRead): boolean {
@@ -403,6 +405,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
     //@ts-ignore
     unshift(...items): number {
         const result = this._target.unshift(...items);
+        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
         this._fireAfterValuesRead();
         return result;
     }
@@ -413,6 +416,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
     splice(...items): T[] {
         //@ts-ignore
         const result = this._target.splice(...items);
+        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
         this._fireAfterValuesRead();
         return result;
     }
@@ -421,6 +425,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
     pop(...args: any[]): T | undefined {
         //@ts-ignore
         const result = this._target.pop(...args);
+        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
         this._fireAfterValuesRead();
         return result;
     }
