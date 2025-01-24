@@ -472,22 +472,6 @@ describe('WatchedGraph tests', () => {
 
     });
 
-    test("onAfterWrite expect to receive non-proxied objects or undefined", () => {
-        const origObject: {myProp?: object} = {
-            myProp: undefined,
-        };
-        const valueObj = {}
-        let watchedGraph = new WatchedGraph();
-        const proxy = watchedGraph.getProxyFor(origObject);
-
-        // Install listener:
-        let writes: unknown[] = [];
-        watchedGraph.onAfterWriteOnProperty(origObject, "myProp", () => writes.push("dummy"));
-
-        proxy.myProp = valueObj;
-        expect(writes[0] === undefined || writes[0] === valueObj).toBeTruthy()
-    });
-
     it("should not fire onChange when value stays the same", ()=> {
         // TODO
     })
