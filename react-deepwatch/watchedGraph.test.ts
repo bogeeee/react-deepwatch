@@ -450,7 +450,7 @@ describe('WatchedGraph tests', () => {
 
         // Install listener:
         let writes: unknown[] = [];
-        watchedGraph.onAfterWriteOnProperty(sampleGraph, "appName", (newValue) => writes.push(newValue));
+        watchedGraph.onAfterWriteOnProperty(sampleGraph, "appName", () => writes.push("dummy"));
 
         proxy.appName = "xyz"; proxy.appName = "123";
         expect(writes.length).toEqual(2)
@@ -464,7 +464,7 @@ describe('WatchedGraph tests', () => {
 
         // Install listener:
         let writes: unknown[] = [];
-        watchedGraph.onAfterWriteOnProperty(sampleGraph, "counter", (newValue) => writes.push(newValue));
+        watchedGraph.onAfterWriteOnProperty(sampleGraph, "counter", () => writes.push("dummy"));
 
         proxy.counter++;
         expect(writes.length).toEqual(1);
@@ -481,7 +481,7 @@ describe('WatchedGraph tests', () => {
 
         // Install listener:
         let writes: unknown[] = [];
-        watchedGraph.onAfterWriteOnProperty(origObject, "myProp", (newValue) => writes.push(newValue));
+        watchedGraph.onAfterWriteOnProperty(origObject, "myProp", () => writes.push("dummy"));
 
         proxy.myProp = valueObj;
         expect(writes[0] === undefined || writes[0] === valueObj).toBeTruthy()
@@ -885,7 +885,7 @@ describe('WatchedGraph integrity', () => {
 
         return {
         origObj: makeArray(["a", undefined, undefined, "d"]),
-        writerFn: (obj: string[]) => {
+        writerFn: (obj: unknown[]) => {
             expect(obj.length).toEqual(4);
             expect([...Object.keys(obj)]).toEqual(["0", "3"]);
             expect(obj.pop()).toEqual("d");
@@ -897,7 +897,7 @@ describe('WatchedGraph integrity', () => {
 
 });
 
-function fnToString(fn: (args: unknown[]) => unknown) {
+function fnToString(fn: (...args: any[]) => unknown) {
     return fn.toString().replace(/\s/g,"");
 }
 
