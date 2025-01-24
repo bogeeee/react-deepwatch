@@ -95,7 +95,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         }
         getWriteListenersForObject(this.obj).afterChangeProperty_listeners.add(this.key, listener);
         if(Array.isArray(this.obj)) {
-            getWriteListenersForArray(this.obj).afterUnspecificWrite.add(listener);
+            getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
         }
         debug_numberOfPropertyChangeListeners++;
     }
@@ -103,7 +103,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
     offChange(listener: () => void) {
         writeListenersForObject.get(this.obj)?.afterChangeProperty_listeners.delete(this.key, listener);
         if(Array.isArray(this.obj)) {
-            writeListenersForArray.get(this.obj)?.afterUnspecificWrite.delete(listener);
+            writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
         }
         debug_numberOfPropertyChangeListeners--;
     }
@@ -135,14 +135,14 @@ export class RecordedOwnKeysRead extends RecordedReadOnProxiedObject{
         }
         getWriteListenersForObject(this.obj).afterChangeOwnKeys_listeners.add(listener);
         if(Array.isArray(this.obj)) {
-            getWriteListenersForArray(this.obj).afterUnspecificWrite.add(listener);
+            getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
         }
     }
 
     offChange(listener: AfterChangeOwnKeysListener) {
         writeListenersForObject.get(this.obj)?.afterChangeOwnKeys_listeners.delete(listener);
         if(Array.isArray(this.obj)) {
-            writeListenersForArray.get(this.obj)?.afterUnspecificWrite.delete(listener);
+            writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
         }
     }
 
@@ -173,11 +173,11 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
             enhanceWithWriteTracker(this.origObj);
         }
         getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.add(listener);
-        getWriteListenersForArray(this.origObj).afterUnspecificWrite.add(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
     }
 
     offChange(listener: () => void) {
-        getWriteListenersForArray(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
         getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.delete(listener);
     }
     
@@ -534,7 +534,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
             super.rawChange(key, newValue);
             if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
                 if(Array.isArray(this.target)) {
-                    callListeners(writeListenersForArray.get(this.target)?.afterUnspecificWrite);
+                    callListeners(writeListenersForObject.get(this.target)?.afterUnspecificWrite);
                 }
                 const writeListeners = writeListenersForObject.get(this.target);
                 callListeners(writeListeners?.afterChangeProperty_listeners.get(key));

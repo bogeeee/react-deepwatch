@@ -23,6 +23,7 @@ class ObjectWriteListeners {
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
+    afterUnspecificWrite = new Set<AfterWriteListener>();
 }
 
 export const writeListenersForObject = new WeakMap<object, ObjectWriteListeners>();
@@ -99,7 +100,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
 
                     // Call listeners:
                     if(Array.isArray(target)) {
-                        callListeners(writeListenersForArray.get(target)?.afterUnspecificWrite);
+                        callListeners(writeListenersForObject.get(target)?.afterUnspecificWrite);
                     }
                     callListeners(writeListenersForTarget?.afterChangeProperty_listeners.get(key))
                 }
@@ -125,7 +126,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
 
     fire_array_afterUnspecificWrite() {
         return runAndCallListenersOnce_after(this.target, (callListeners) => {
-            callListeners(writeListenersForArray.get(this.target as Array<unknown>)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this.target as Array<unknown>)?.afterUnspecificWrite);
         });
     }
 
@@ -180,7 +181,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             }
             return runAndCallListenersOnce_after(target, (callListeners) => {
                 const callResult = origMethod!.apply(this, args);  // call original method
-                callListeners(writeListenersForArray.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
+                callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
                 return callResult;
             });
         }

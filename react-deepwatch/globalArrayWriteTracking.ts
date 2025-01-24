@@ -9,7 +9,7 @@ import {writeListenersForObject} from "./globalObjectWriteTracking";
  * {@link ObjectWriteListeners} are also subscribed on Arrays
  */
 class ArrayWriteListeners {
-    afterUnspecificWrite = new Set<AfterWriteListener>
+
 }
 
 export const writeListenersForArray = new WeakMap<unknown[], ArrayWriteListeners>();
@@ -33,7 +33,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
 
     protected _fireAfterUnspecificWrite() {
         runAndCallListenersOnce_after(this._target, (callListeners) => {
-            callListeners(writeListenersForArray.get(this._target)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
         });
     }
 
