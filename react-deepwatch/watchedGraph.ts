@@ -403,33 +403,56 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
     }
 
     //@ts-ignore
+    shift(...args: any[]) {
+        return runAndCallListenersOnce_after(this._target, (callListeners) => {
+            //@ts-ignore
+            const result = this._target.shift(...args);
+            callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            this._fireAfterValuesRead();
+            return result;
+        });
+    }
+
+    //@ts-ignore
     unshift(...items): number {
-        const result = this._target.unshift(...items);
-        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
-        this._fireAfterValuesRead();
-        return result;
+        return runAndCallListenersOnce_after(this._target, (callListeners) => {
+            const result = this._target.unshift(...items);
+            callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            this._fireAfterValuesRead();
+            return result;
+        });
     }
 
     //forEach(...args: any[]) // Already reads "length" an thererfore triggers the read
 
     //@ts-ignore
     splice(...items): T[] {
-        //@ts-ignore
-        const result = this._target.splice(...items);
-        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
-        this._fireAfterValuesRead();
-        return result;
+        return runAndCallListenersOnce_after(this._target, (callListeners) => {
+            //@ts-ignore
+            const result = this._target.splice(...items);
+            callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            this._fireAfterValuesRead();
+            return result;
+        });
     }
 
     //@ts-ignore
     pop(...args: any[]): T | undefined {
-        //@ts-ignore
-        const result = this._target.pop(...args);
-        getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners.forEach(l => l()); // Call listeners
-        this._fireAfterValuesRead();
-        return result;
+        return runAndCallListenersOnce_after(this._target, (callListeners) => {
+            //@ts-ignore
+            const result = this._target.pop(...args);
+            callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            this._fireAfterValuesRead();
+            return result;
+        });
+
     }
 
+    //TODO: reverse(): T[] {}
+    //TODO:    slice(start?: number, end?: number): T[] {}
+
+
+    // TODO: further methods
 }
 
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {

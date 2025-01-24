@@ -1,4 +1,4 @@
-import {AfterWriteListener, DualUseTracker} from "./common";
+import {AfterWriteListener, DualUseTracker, runAndCallListenersOnce_after} from "./common";
 import {throwError} from "./Util";
 import {writeListenersForObject} from "./globalObjectWriteTracking";
 
@@ -32,7 +32,9 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
 
 
     protected _fireAfterUnspecificWrite() {
-        writeListenersForArray.get(this._target)?.afterUnspecificWrite.forEach(l => l());
+        runAndCallListenersOnce_after(this._target, (callListeners) => {
+            callListeners(writeListenersForArray.get(this._target)?.afterUnspecificWrite);
+        });
     }
 
     //push(...items: any[]): number //already calls set

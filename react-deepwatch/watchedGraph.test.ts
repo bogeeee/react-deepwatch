@@ -343,7 +343,7 @@ describe('WatchedGraph record read and watch it', () => {
 
 
 
-
+    // TODO: Test, if behaviour is normal. I.e. push object to an array an check .length
 
 
     // TODO: non enumerable properties
