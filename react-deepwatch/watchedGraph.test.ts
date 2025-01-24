@@ -11,6 +11,7 @@ import {arraysAreEqualsByPredicateFn, isObject, visitReplace} from "./Util";
 import {Clazz, ObjKey} from "./common";
 import {deleteProperty, enhanceWithWriteTracker} from "./globalWriteTracking";
 import {ProxiedGraph} from "./proxiedGraph";
+import exp from "constants";
 
 beforeEach(() => {
 
@@ -838,6 +839,37 @@ describe('WatchedGraph record read and watch it', () => {
         });
     }
 
+    for(const readerFn of [(obj: string[]) => Object.keys(obj), (obj: string[]) => obj[0], (obj: string[]) => {for(const o of obj) read(o)}]) {
+         testRecordReadAndWatch(`Future functionality of array with reader: ${fnToString(readerFn)}`, () => {
+            return {
+                origObj: ["a", "b", "c"],
+                readerFn,
+                writerFn: (obj) => {
+                    function someFuturisticMethod(this: unknown, a: unknown, b: unknown) {
+                        return {a, b, me: this};
+                    }
+
+                    //@ts-ignore
+                    Array.prototype.someFuturisticMethod = someFuturisticMethod; // Enhance Array
+                    try {
+                        const result = (obj as any).someFuturisticMethod("a", "b");
+                        // Check if params were handed correctly
+                        expect(result.a).toBe("a")
+                        expect(result.b).toBe("b")
+
+                        expect(result.me === obj).toBeTruthy(); // Expect to someFuturisticMethod to receive the proper "this"
+                    } finally {
+                        //@ts-ignore
+                        delete Array.prototype.someFuturisticMethod;
+                    }
+
+                },
+            }
+        });
+    }
+
+
+
     /* Template:
     testRecordReadAndWatch("xxx", () => {
         const obj: {} = {};
@@ -892,6 +924,8 @@ describe('WatchedGraph integrity', () => {
             expect(obj.length).toBe(3);
         }}
     },"arrays with gaps");
+
+
 
     // TODO: unshift, spice, fill, copywithin, reverse
 

@@ -78,3 +78,6 @@ export function runAndCallListenersOnce_after<R>(forTarget: object, collectorFn:
         }
     }
 }
+
+export const readOnlyArrayMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "keys", "values", "slice", "some", "filter", "find", Symbol.iterator, "entries", "every", "findIndex", "includes", "indexOf", "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString"]);
+export const readOnlyArrayFields = new Set<keyof Array<unknown>>(["length", Symbol.unscopables]);

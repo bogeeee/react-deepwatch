@@ -8,7 +8,7 @@ import {
     getPropertyDescriptor,
     GetterFlags,
     ObjKey,
-    SetterFlags
+    SetterFlags, readOnlyArrayMethods, readOnlyArrayFields
 } from "./common";
 import {writeListenersForArray} from "./globalArrayWriteTracking";
 
@@ -123,9 +123,17 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         })
     }
 
+    fire_array_afterUnspecificWrite() {
+        return runAndCallListenersOnce_after(this.target, (callListeners) => {
+            callListeners(writeListenersForArray.get(this.target as Array<unknown>)?.afterUnspecificWrite);
+        });
+    }
+
     get(fake_target:object, key: ObjKey, receiver:any): any {
         // Validity check
-        if(receiver !== this.target) {
+        const target = this.target;
+
+        if(receiver !== target) {
             throw new Error("Invalid state. Get was called on a different object than this write-tracker-proxy (which is set as the prototype) is for. Did you clone the object, resulting in shared prototypes?")
         }
 
@@ -136,22 +144,45 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             if (propOnSupervisor !== undefined) { // Supervisor class is responsible for the property (or method) ?
                 //@ts-ignore
                 if (propOnSupervisor.get) { // Prop is a getter?
-                    return propOnSupervisor.get.apply(this.target)
+                    return propOnSupervisor.get.apply(target)
                 } else if (propOnSupervisor.value) { // Prop is a value, meaning a function. (Supervisors don't have fields)
                     return supervisorClass.prototype[key];
                 }
             }
+            else {
+                origMethod = supervisorClass.prototype[key]
+                if(typeof origMethod === "function" && Array.isArray(target) && !readOnlyArrayMethods.has(key as any) && !(key as any in Object.prototype)) { // Non-listed property from Array implementation?
+                    // The non-listed property/method may be from a future js version. So we must assume the worst case and threat it as an unspecific write
+                    return writeTrapForUnhandledMethod
+                }
+            }
         }
 
-
         // return this.target[key]; // This line does not work because it does not consult ObjectProxyHandler#getPrototypeOf and therefore uses the actual tinkered prototype chain which has this proxy in there and calls get (endless recursion)
-        const propDesc = getPropertyDescriptor(this.target, key)
+        const propDesc = getPropertyDescriptor(target, key)
         if (propDesc !== undefined) {
+            let result: unknown;
             let getter = propDesc.get;
             if (getter !== undefined) {
-                return getter.apply(this.target);
+                result = getter.apply(target);
             }
-            return  propDesc.value;
+            else {
+                result = propDesc.value;
+            }
+            return result;
+        }
+
+        // Calls the afterUnspecificWrite listeners
+        var origMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        function writeTrapForUnhandledMethod(this:object, ...args: unknown[]) {
+            if(this !== receiver) {
+                //throw new Error("Invalid state. Method was called on invalid target")
+            }
+            return runAndCallListenersOnce_after(target, (callListeners) => {
+                const callResult = origMethod!.apply(this, args);  // call original method
+                callListeners(writeListenersForArray.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
+                return callResult;
+            });
         }
     }
 
