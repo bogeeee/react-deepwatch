@@ -12,7 +12,7 @@ import {
     AfterWriteListener,
     Clazz,
     DualUseTracker, getPropertyDescriptor, runAndCallListenersOnce_after,
-    ObjKey
+    ObjKey, WriteTrackerClass
 } from "./common";
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
 import _ from "underscore"
@@ -466,7 +466,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     /**
      * "Serve" these classes's methods and property accessors.
      */
-    supervisorClasses: {watcher: Clazz, writeTracker: Clazz} | undefined
+    supervisorClasses: {watcher: Clazz, writeTracker: WriteTrackerClass} | undefined
 
 
     constructor(target: object, graph: WatchedGraph) {
@@ -490,31 +490,51 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         this.graph._afterReadListeners.forEach(l => l(read)); // Inform listeners
     }
 
-    get (fake_target:object, p:string | symbol, dontUse_receiver:any) {
-        if(p === "_watchedGraphHandler") { // TODO: use symbol for that (performance)
+    get (fake_target:object, key:string | symbol, receiver:any) {
+        const target = this.target;
+
+        if(key === "_watchedGraphHandler") { // TODO: use symbol for that (performance)
             return this;
         }
-        if(p === "_target") { // TODO: use symbol for that (performance)
+        if(key === "_target") { // TODO: use symbol for that (performance)
             return this.target;
         }
 
         // Check for and use supervisor class:
         if(this.supervisorClasses !== undefined) {
             for(const SupervisorClass of [this.supervisorClasses.watcher, this.supervisorClasses.writeTracker]) {
-                let propOnSupervisor = Object.getOwnPropertyDescriptor(SupervisorClass.prototype, p);
+                let propOnSupervisor = Object.getOwnPropertyDescriptor(SupervisorClass.prototype, key);
                 if(propOnSupervisor !== undefined) { // Supervisor class is responsible for the property (or method) ?
                     //@ts-ignore
                     if(propOnSupervisor.get) { // Prop is a getter?
                         return this.graph.getProxyFor(propOnSupervisor.get.apply(this.proxy))
                     }
                     else if(propOnSupervisor.value) { // Prop is a value, meaning a function. (Supervisors don't have fields)
-                        return SupervisorClass.prototype[p];
+                        return SupervisorClass.prototype[key];
                     }
                 }
             }
+            // When arriving here, the field is not **directly** in one of the supervisor classes
+            origWriterMethod = this.supervisorClasses.writeTracker.prototype[key]
+            if(typeof origWriterMethod === "function" && !this.supervisorClasses.writeTracker.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read+write method that was not handled directly by supervisor class?
+                return trapForGenericWriterMethod // Assume the worst, that it is a writer method
+            }
         }
 
-        return super.get(fake_target, p, dontUse_receiver);
+        return super.get(fake_target, key, receiver);
+
+        // Calls the afterUnspecificWrite listeners
+        var origWriterMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        function trapForGenericWriterMethod(this:object, ...args: unknown[]) {
+            if(this !== receiver) {
+                //throw new Error("Invalid state. Method was called on invalid target")
+            }
+            return runAndCallListenersOnce_after(target, (callListeners) => {
+                const callResult = origWriterMethod!.apply(this, args);  // call original method
+                callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
+                return callResult;
+            });
+        }
     }
 
     rawRead(key: ObjKey) {

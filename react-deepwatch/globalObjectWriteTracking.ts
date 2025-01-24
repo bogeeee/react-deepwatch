@@ -4,13 +4,14 @@
 import {MapSet} from "./Util";
 import {
     AfterChangeOwnKeysListener,
-    AfterWriteListener, runAndCallListenersOnce_after, Clazz,
+    AfterWriteListener,
     getPropertyDescriptor,
     GetterFlags,
     ObjKey,
-    SetterFlags
+    runAndCallListenersOnce_after,
+    SetterFlags,
+    WriteTrackerClass
 } from "./common";
-import {writeListenersForArray} from "./globalArrayWriteTracking";
 
 /**
  * Note for specificity: There will be only one of the **change** events fired. The Recorded...Read.onChange handler will add the listeners to all possible candidates. It's this way around.
@@ -37,12 +38,12 @@ export function getWriteListenersForObject(obj: object) {
 
 export class ObjectProxyHandler implements ProxyHandler<object> {
     target: object;
-    supervisorClass?: Clazz & {readOnlyMethods: Set<ObjKey>, readOnlyFields: Set<ObjKey>}
+    supervisorClass?: WriteTrackerClass
     origPrototype: object | null;
 
     proxy: object;
 
-    constructor(target: object, supervisorClass?: ObjectProxyHandler["supervisorClass"]) {
+    constructor(target: object, supervisorClass?: WriteTrackerClass) {
         this.target = target;
         this.supervisorClass = supervisorClass;
         this.origPrototype = Object.getPrototypeOf(target);
@@ -151,10 +152,9 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                 }
             }
             else {
-                origMethod = supervisorClass.prototype[key]
-                if(typeof origMethod === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not explicitly handled directly in supervisor class?
-                    // The non-listed property/method may be from a future js version. So we must assume the worst case and threat it as an unspecific write
-                    return writeTrapForUnhandledMethod
+                origWriterMethod = supervisorClass.prototype[key]
+                if(typeof origWriterMethod === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not handled directly by supervisor class?
+                    return trapForGenericWriterMethod // Assume the worst, that it is a writer method
                 }
             }
         }
@@ -174,13 +174,13 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
         }
 
         // Calls the afterUnspecificWrite listeners
-        var origMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
-        function writeTrapForUnhandledMethod(this:object, ...args: unknown[]) {
+        var origWriterMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        function trapForGenericWriterMethod(this:object, ...args: unknown[]) {
             if(this !== receiver) {
                 //throw new Error("Invalid state. Method was called on invalid target")
             }
             return runAndCallListenersOnce_after(target, (callListeners) => {
-                const callResult = origMethod!.apply(this, args);  // call original method
+                const callResult = origWriterMethod!.apply(this, args);  // call original method
                 callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
                 return callResult;
             });

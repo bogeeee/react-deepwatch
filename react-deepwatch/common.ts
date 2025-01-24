@@ -79,3 +79,4 @@ export function runAndCallListenersOnce_after<R>(forTarget: object, collectorFn:
     }
 }
 
+export type WriteTrackerClass = Clazz & { readOnlyMethods: Set<ObjKey>, readOnlyFields: Set<ObjKey> };
