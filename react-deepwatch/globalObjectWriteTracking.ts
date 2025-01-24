@@ -8,7 +8,7 @@ import {
     getPropertyDescriptor,
     GetterFlags,
     ObjKey,
-    SetterFlags, readOnlyArrayMethods, readOnlyArrayFields
+    SetterFlags
 } from "./common";
 import {writeListenersForArray} from "./globalArrayWriteTracking";
 
@@ -37,12 +37,12 @@ export function getWriteListenersForObject(obj: object) {
 
 export class ObjectProxyHandler implements ProxyHandler<object> {
     target: object;
-    supervisorClass?: Clazz
+    supervisorClass?: Clazz & {readOnlyMethods: Set<ObjKey>, readOnlyFields: Set<ObjKey>}
     origPrototype: object | null;
 
     proxy: object;
 
-    constructor(target: object, supervisorClass?: Clazz) {
+    constructor(target: object, supervisorClass?: ObjectProxyHandler["supervisorClass"]) {
         this.target = target;
         this.supervisorClass = supervisorClass;
         this.origPrototype = Object.getPrototypeOf(target);
@@ -152,7 +152,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             }
             else {
                 origMethod = supervisorClass.prototype[key]
-                if(typeof origMethod === "function" && Array.isArray(target) && !readOnlyArrayMethods.has(key as any) && !(key as any in Object.prototype)) { // Non-listed property from Array implementation?
+                if(typeof origMethod === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not explicitly handled directly in supervisor class?
                     // The non-listed property/method may be from a future js version. So we must assume the worst case and threat it as an unspecific write
                     return writeTrapForUnhandledMethod
                 }

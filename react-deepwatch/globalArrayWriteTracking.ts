@@ -1,4 +1,4 @@
-import {AfterWriteListener, DualUseTracker, runAndCallListenersOnce_after} from "./common";
+import {AfterWriteListener, DualUseTracker, ObjKey, runAndCallListenersOnce_after} from "./common";
 import {throwError} from "./Util";
 import {writeListenersForObject} from "./globalObjectWriteTracking";
 
@@ -26,7 +26,8 @@ export function getWriteListenersForArray(array: unknown[]) {
  * The "this" may be different in these cases.
  */
 export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Array<T>>{
-
+    static readOnlyMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "keys", "values", "slice", "some", "filter", "find", Symbol.iterator, "entries", "every", "findIndex", "includes", "indexOf", "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString"]) as Set<ObjKey>;
+    static readOnlyFields = new Set<keyof Array<unknown>>(["length", Symbol.unscopables]) as Set<ObjKey>;
 
     // TODO: In the future, implement more fine granular change listeners that act on change of a certain index.
 
