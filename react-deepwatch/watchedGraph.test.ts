@@ -7,7 +7,7 @@ import {
     WatchedGraph
 } from "./watchedGraph";
 import _ from "underscore"
-import {arraysAreEqualsByPredicateFn} from "./Util";
+import {arraysAreEqualsByPredicateFn, isObject, visitReplace} from "./Util";
 import {Clazz, ObjKey} from "./common";
 import {deleteProperty, enhanceWithWriteTracker} from "./globalWriteTracking";
 import {ProxiedGraph} from "./proxiedGraph";
@@ -519,6 +519,9 @@ describe('WatchedGraph record read and watch it', () => {
     }
 
     function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean, pickReader?: Clazz}) {
+        if(provideTestSetup().writerFn) {
+            testWriterConsitency(provideTestSetup as any);
+        }
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
@@ -859,3 +862,42 @@ describe('WatchedGraph record read and watch it', () => {
 function fnToString(fn: (args: unknown[]) => unknown) {
     return fn.toString().replace(/\s/g,"");
 }
+
+function enhanceWithWriteTrackerDeep(obj: object) {
+    visitReplace(obj, (value, visitChilds, context) => {
+        if(isObject(value)) {
+            enhanceWithWriteTracker(value);
+        }
+        return visitChilds(value, context)
+    })
+}
+
+/**
+ * Test, if writerFn behaves normal when used through the watchedgraph, etc.
+ * @param name
+ * @param provideTestSetup
+ */
+function testWriterConsitency<T extends object>(provideTestSetup: () => {origObj: T, writerFn: (obj: T) => void}) {
+    for (const mode of ["With writes from inside", "With writes from outside"]) {
+        test(`WriterFn ${fnToString(provideTestSetup().writerFn)} should behave normally. ${mode}`, () => {
+            const origForCompareTestSetup = provideTestSetup();
+            origForCompareTestSetup.writerFn(origForCompareTestSetup.origObj);
+
+            if (mode === "With writes from inside") {
+                const testSetup = provideTestSetup();
+                const proxy = new WatchedGraph().getProxyFor(testSetup.origObj)
+                testSetup.writerFn(proxy);
+                expect(_.isEqual(proxy, origForCompareTestSetup.origObj)).toBeTruthy();
+                expect(_.isEqual(testSetup.origObj, origForCompareTestSetup.origObj)).toBeTruthy();
+            } else if (mode === "With writes from outside") {
+                const testSetup = provideTestSetup();
+                const proxy = new WatchedGraph().getProxyFor(testSetup.origObj);
+                enhanceWithWriteTrackerDeep(testSetup.origObj);
+                testSetup.writerFn(testSetup.origObj);
+                expect(_.isEqual(proxy, origForCompareTestSetup.origObj)).toBeTruthy();
+                expect(_.isEqual(testSetup.origObj, origForCompareTestSetup.origObj)).toBeTruthy();
+            }
+        });
+    }
+}
+
