@@ -825,15 +825,8 @@ describe('WatchedGraph record read and watch it', () => {
     }
 
 
-
-    // TODO: Test, if behaviour is normal. I.e. push object to an array an check .length
-
-
     // TODO: non enumerable properties
 
-
-    // TODO: arrays with gaps
-    // TODO: arrays with read+write methods (at the same time): unshift, splice
     for(const readWriteFn of [(arr: any[]) => arr.pop()] ) {
         testRecordReadAndWatch(`Arrays with Read-Write method: ${fnToString(readWriteFn)}`, () => {
             return {
@@ -859,6 +852,51 @@ describe('WatchedGraph record read and watch it', () => {
     */
 });
 
+describe('WatchedGraph integrity', () => {
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c"],
+        writerFn: (obj: string[]) => {
+            expect(obj.push("d")).toEqual(4);
+            expect(obj.length).toEqual(4);
+
+            expect(obj.push("e","f")).toEqual(6);
+        }}
+    },"array.push (various)");
+
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c"],
+        writerFn: (obj: string[]) => {
+            expect(obj.pop()).toEqual("c");
+            expect(obj.length).toEqual(2);
+        }}
+    },"array.pop (various)");
+
+
+    testWriterConsitency(() => {
+        const makeArray = (value: unknown[]) => {
+            let result: unknown[] = [];
+            for (const i in value) {
+                if (value[i] !== undefined) {
+                    result[i] = value[i];
+                }
+            }
+            return result
+        }
+
+        return {
+        origObj: makeArray(["a", undefined, undefined, "d"]),
+        writerFn: (obj: string[]) => {
+            expect(obj.length).toEqual(4);
+            expect([...Object.keys(obj)]).toEqual(["0", "3"]);
+            expect(obj.pop()).toEqual("d");
+            expect(obj.length).toBe(3);
+        }}
+    },"arrays with gaps");
+
+    // TODO: unshift, spice, fill, copywithin, reverse
+
+});
+
 function fnToString(fn: (args: unknown[]) => unknown) {
     return fn.toString().replace(/\s/g,"");
 }
@@ -877,9 +915,9 @@ function enhanceWithWriteTrackerDeep(obj: object) {
  * @param name
  * @param provideTestSetup
  */
-function testWriterConsitency<T extends object>(provideTestSetup: () => {origObj: T, writerFn: (obj: T) => void}) {
+function testWriterConsitency<T extends object>(provideTestSetup: () => {origObj: T, writerFn: (obj: T) => void}, name?: string) {
     for (const mode of ["With writes from inside", "With writes from outside"]) {
-        test(`WriterFn ${fnToString(provideTestSetup().writerFn)} should behave normally. ${mode}`, () => {
+        test(`WriterFn ${name || fnToString(provideTestSetup().writerFn)} should behave normally. ${mode}`, () => {
             const origForCompareTestSetup = provideTestSetup();
             origForCompareTestSetup.writerFn(origForCompareTestSetup.origObj);
 
