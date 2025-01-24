@@ -853,6 +853,12 @@ describe('WatchedGraph record read and watch it', () => {
     }
 
 
+    testRecordReadAndWatch<string[]>("methods from Object.prototype called on an array", () => {
+        return {
+            origObj: ["a", "b", "c"],
+            readerFn: (obj) => {expect(obj.toString()).toBe('a,b,c')},
+        }
+    });
 
     /* Template:
     testRecordReadAndWatch("xxx", () => {
