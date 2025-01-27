@@ -24,6 +24,10 @@ class ObjectWriteListeners {
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
+    /**
+     * These will always be called, no matter how specific a change is
+     */
+    afterAnyWrite_listeners = new Set<()=>void>();
     afterUnspecificWrite = new Set<AfterWriteListener>();
 }
 
@@ -86,6 +90,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                 if(origSetter !== undefined) {
                     origSetter.apply(target, [newValue]);  // call the setter
                     callListeners(writeListenersForTarget?.afterSetterInvoke_listeners.get(key));
+                    callListeners(writeListenersForTarget?.afterAnyWrite_listeners);
                     return;
                 }
 
@@ -104,6 +109,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                         callListeners(writeListenersForObject.get(target)?.afterUnspecificWrite);
                     }
                     callListeners(writeListenersForTarget?.afterChangeProperty_listeners.get(key))
+                    callListeners(writeListenersForTarget?.afterAnyWrite_listeners)
                 }
             });
         }
@@ -128,6 +134,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
     fire_array_afterUnspecificWrite() {
         return runAndCallListenersOnce_after(this.target, (callListeners) => {
             callListeners(writeListenersForObject.get(this.target as Array<unknown>)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this.target as Array<unknown>)?.afterAnyWrite_listeners);
         });
     }
 
@@ -182,6 +189,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             return runAndCallListenersOnce_after(target, (callListeners) => {
                 const callResult = origWriterMethod!.apply(this, args);  // call original method
                 callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
+                callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterAnyWrite_listeners); // Call listeners
                 return callResult;
             });
         }
@@ -203,6 +211,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
 
             // There was no setter trap yet. This means that the key is new. Inform those listeners:
             callListeners(writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners);
+            callListeners(writeListenersForObject.get(this.target)?.afterAnyWrite_listeners);
         });
 
         return true;

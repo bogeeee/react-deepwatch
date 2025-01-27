@@ -35,6 +35,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
     protected _fireAfterUnspecificWrite() {
         runAndCallListenersOnce_after(this._target, (callListeners) => {
             callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this._target)?.afterAnyWrite_listeners);
         });
     }
 

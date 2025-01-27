@@ -155,6 +155,30 @@ export class RecordedOwnKeysRead extends RecordedReadOnProxiedObject{
     }
 }
 
+/**
+ * Fired when a method was called that is not implemented in the supervisor. May be from a future js version
+ */
+export class RecordedUnspecificRead extends RecordedReadOnProxiedObject{
+    get isChanged() {
+        return true;
+    }
+
+    onChange(listener: () => void, trackOriginal=false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.obj);
+        }
+        getWriteListenersForObject(this.obj).afterAnyWrite_listeners.add(listener);
+    }
+
+    offChange(listener: AfterChangeOwnKeysListener) {
+        writeListenersForObject.get(this.obj)?.afterAnyWrite_listeners.delete(listener);
+    }
+
+    equals(other: RecordedRead) {
+        return false;
+    }
+}
+
 export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
     values: unknown[];
     
@@ -408,6 +432,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.shift(...args);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
         });
@@ -418,12 +443,20 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
         return runAndCallListenersOnce_after(this._target, (callListeners) => {
             const result = this._target.unshift(...items);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
         });
     }
 
-    //forEach(...args: any[]) // Already reads "length" an thererfore triggers the read
+    /**
+     * Keep this method so it it treated as handled and not as making-unspecific-reads
+     * @param args
+     */
+    forEach(...args: any[]) {
+        //@ts-ignore
+        return super.forEach(...args); //reads "length" an thererfore triggers the read
+    }
 
     //@ts-ignore
     splice(...items): T[] {
@@ -431,6 +464,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.splice(...items);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
         });
@@ -442,6 +476,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.pop(...args);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
         });
@@ -453,6 +488,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
 
 
     // TODO: further methods
+
 }
 
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
@@ -492,6 +528,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
 
     get (fake_target:object, key:string | symbol, receiver:any) {
         const target = this.target;
+        const thisHandler = this;
 
         if(key === "_watchedGraphHandler") { // TODO: use symbol for that (performance)
             return this;
@@ -515,23 +552,32 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
                 }
             }
             // When arriving here, the field is not **directly** in one of the supervisor classes
-            origWriterMethod = this.supervisorClasses.writeTracker.prototype[key]
-            if(typeof origWriterMethod === "function" && !this.supervisorClasses.writeTracker.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read+write method that was not handled directly by supervisor class?
-                return trapForGenericWriterMethod // Assume the worst, that it is a writer method
+            origMethod = this.supervisorClasses.writeTracker.prototype[key]
+            if(typeof origMethod === "function" && !(key as any in Object.prototype)) { // Read+write method that was not handled directly by supervisor class?
+                if(this.supervisorClasses.writeTracker.readOnlyMethods.has(key)) {
+                    return trapForGenericReaderMethod
+                }
+                else {
+                    return trapForGenericReaderWriterMethod // Assume the worst, that it is a writer method
+                }
             }
         }
 
         return super.get(fake_target, key, receiver);
 
         // Calls the afterUnspecificWrite listeners
-        var origWriterMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
-        function trapForGenericWriterMethod(this:object, ...args: unknown[]) {
-            if(this !== receiver) {
-                //throw new Error("Invalid state. Method was called on invalid target")
-            }
+        var origMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        function trapForGenericReaderMethod(this:object, ...args: unknown[]) {
+            const callResult = origMethod!.apply(this, args);  // call original method
+            thisHandler.fireAfterRead(new RecordedUnspecificRead());
+            return callResult;
+        }
+        function trapForGenericReaderWriterMethod(this:object, ...args: unknown[]) {
             return runAndCallListenersOnce_after(target, (callListeners) => {
-                const callResult = origWriterMethod!.apply(this, args);  // call original method
+                const callResult = origMethod!.apply(this, args);  // call original method
                 callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
+                callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterAnyWrite_listeners); // Call listeners
+                thisHandler.fireAfterRead(new RecordedUnspecificRead());
                 return callResult;
             });
         }
@@ -561,6 +607,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
                 if (isNewProperty) {
                     callListeners(writeListeners?.afterChangeOwnKeys_listeners);
                 }
+                callListeners(writeListeners?.afterAnyWrite_listeners);
             }
         });
 
@@ -576,6 +623,7 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
             if (doesExists) {
                 if (!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
                     callListeners(writeListenersForObject.get(this.target)?.afterChangeOwnKeys_listeners);
+                    callListeners(writeListenersForObject.get(this.target)?.afterAnyWrite_listeners);
                 }
             }
             return result;

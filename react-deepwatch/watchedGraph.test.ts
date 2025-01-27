@@ -852,6 +852,35 @@ describe('WatchedGraph record read and watch it', () => {
         });
     }
 
+    testRecordReadAndWatch(`Future/unhandled read methods on array should fire an unspecific read`, () => {
+        return {
+            origObj: ["a", "b", "c"],
+            readerFn: (obj) => {
+                function someFuturisticMethod(this: unknown, a: unknown, b: unknown) {
+                    return {a, b, me: this};
+                }
+
+                //@ts-ignore
+                Array.prototype.someFuturisticMethod = someFuturisticMethod; // Enhance Array
+                try {
+                    const result = (obj as any).someFuturisticMethod("a", "b");
+                    // Check if params were handed correctly
+                    expect(result.a).toBe("a")
+                    expect(result.b).toBe("b")
+
+                    expect(result.me === obj).toBeTruthy(); // Expect to someFuturisticMethod to receive the proper "this"
+                } finally {
+                    //@ts-ignore
+                    delete Array.prototype.someFuturisticMethod;
+                }
+
+            },
+            writerFn: (obj) => {obj[3] = "d"},
+            skipTestReadsAreEqual: true
+
+        }
+    });
+
 
     testRecordReadAndWatch<string[]>("methods from Object.prototype called on an array", () => {
         return {
