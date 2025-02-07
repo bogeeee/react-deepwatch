@@ -26,6 +26,11 @@ export function getWriteListenersForArray(array: unknown[]) {
  * The "this" may be different in these cases.
  */
 export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Array<T>>{
+    /**
+     * Built-in Methods, which are using fields / calling methods on the proxy transparently/loyally, so those methods don't call/use internal stuff directly.
+     * Tested with, see dev_generateEsRuntimeBehaviourCheckerCode.ts
+     */
+    static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString"]) as Set<ObjKey>;
     static readOnlyMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "keys", "values", "slice", "some", "filter", "find", Symbol.iterator, "entries", "every", "findIndex", "includes", "indexOf", "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString"]) as Set<ObjKey>;
     static readOnlyFields = new Set<keyof Array<unknown>>(["length", Symbol.unscopables]) as Set<ObjKey>;
 

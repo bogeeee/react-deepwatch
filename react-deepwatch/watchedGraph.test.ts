@@ -951,7 +951,7 @@ describe('WatchedGraph integrity', () => {
 });
 
 function fnToString(fn: (...args: any[]) => unknown) {
-    return fn.toString().replace(/\s/g,"");
+    return fn.toString().replace(/\s+/g," ").toString();
 }
 
 function enhanceWithWriteTrackerDeep(obj: object) {

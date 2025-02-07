@@ -24,7 +24,8 @@
     }
   },
   "scripts": {
-    "devPlayground.ts": "tsx devPlayground.ts",
+    "dev:playground.ts": "tsx devPlayground.ts",
+    "dev:generateEsRuntimeBehaviourCheckerCode": "tsx dev_generateEsRuntimeBehaviourCheckerCode.ts",
     "clean": "tsc --build --clean && rimraf dist LICENSE readme.md",
     "build": "tsc --build --force && tsc -module ES6 --outDir dist/mjs",
     "test": "npm run clean && vitest --clearScreen --hideSkippedTests --poolOptions.threads.singleThread",

@@ -12,7 +12,7 @@ import {
     AfterWriteListener,
     Clazz,
     DualUseTracker, getPropertyDescriptor, runAndCallListenersOnce_after,
-    ObjKey, WriteTrackerClass
+    ObjKey, WriteTrackerClass, checkEsRuntimeBehaviour
 } from "./common";
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
 import _ from "underscore"
@@ -333,6 +333,11 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
 
     offAfterRead(listener: AfterReadListener) {
         this._afterReadListeners.delete(listener);
+    }
+
+    constructor() {
+        super();
+        checkEsRuntimeBehaviour();
     }
 
     /**

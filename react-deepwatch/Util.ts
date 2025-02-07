@@ -140,3 +140,13 @@ export function visitReplace<O>(value: O, visitor: (value: unknown, visitChilds:
 
     return visitor(value, visitChilds,{diagnosis_path: trackPath?"":undefined}) as O;
 }
+
+/**
+ * Just do something the runtime can't optimize away
+ * @param value
+ */
+export function read(value: any) {
+    if( ("" + value) == "blaaxyxzzzsdf" ) {
+        throw new Error("should never get here")
+    }
+}
