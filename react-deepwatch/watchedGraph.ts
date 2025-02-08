@@ -557,6 +557,9 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
                 }
             }
             // When arriving here, the field is not **directly** in one of the supervisor classes
+            if(this.supervisorClasses.writeTracker.knownHighLevelMethods.has(key)) {
+                return super.get(fake_target, key, receiver); // no special handling
+            }
             origMethod = this.supervisorClasses.writeTracker.prototype[key]
             if(typeof origMethod === "function" && !(key as any in Object.prototype)) { // Read+write method that was not handled directly by supervisor class?
                 if(this.supervisorClasses.writeTracker.readOnlyMethods.has(key)) {
@@ -570,13 +573,20 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
 
         return super.get(fake_target, key, receiver);
 
-        // Calls the afterUnspecificWrite listeners
+
         var origMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        /**
+         * Fires a RecordedUnspecificRead
+         */
         function trapForGenericReaderMethod(this:object, ...args: unknown[]) {
             const callResult = origMethod!.apply(this, args);  // call original method
             thisHandler.fireAfterRead(new RecordedUnspecificRead());
             return callResult;
         }
+        /**
+         * Fires a RecordedUnspecificRead and calls the afterUnspecificWrite listeners
+         * @param args
+         */
         function trapForGenericReaderWriterMethod(this:object, ...args: unknown[]) {
             return runAndCallListenersOnce_after(target, (callListeners) => {
                 const callResult = origMethod!.apply(this, args);  // call original method

@@ -158,9 +158,13 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                     return supervisorClass.prototype[key];
                 }
             }
+            else if(supervisorClass.knownHighLevelMethods.has(key)) {
+                // no special handling
+            }
             else {
-                origWriterMethod = supervisorClass.prototype[key]
-                if(typeof origWriterMethod === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not handled directly by supervisor class?
+                const origValue = supervisorClass.prototype[key]
+                if(typeof origValue === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not handled directly by supervisor class?
+                    origWriterMethod = origValue;
                     return trapForGenericWriterMethod // Assume the worst, that it is a writer method
                 }
             }
@@ -180,8 +184,11 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             return result;
         }
 
-        // Calls the afterUnspecificWrite listeners
         var origWriterMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+       /**
+         * Calls the afterUnspecificWrite listeners
+         * @param args
+         */
         function trapForGenericWriterMethod(this:object, ...args: unknown[]) {
             if(this !== receiver) {
                 //throw new Error("Invalid state. Method was called on invalid target")
