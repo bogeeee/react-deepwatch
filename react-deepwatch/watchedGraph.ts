@@ -437,6 +437,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.shift(...args);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterUnspecificWrite);
             callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
@@ -448,6 +449,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
         return runAndCallListenersOnce_after(this._target, (callListeners) => {
             const result = this._target.unshift(...items);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterUnspecificWrite); // removes or changes also values, so we must also fire this
             callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
@@ -469,6 +471,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.splice(...items);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterUnspecificWrite);
             callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
@@ -481,6 +484,7 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
             //@ts-ignore
             const result = this._target.pop(...args);
             callListeners(getWriteListenersForObject(this._target)?.afterChangeOwnKeys_listeners);
+            callListeners(getWriteListenersForObject(this._target)?.afterUnspecificWrite);
             callListeners(getWriteListenersForObject(this._target)?.afterAnyWrite_listeners);
             this._fireAfterValuesRead();
             return result;
