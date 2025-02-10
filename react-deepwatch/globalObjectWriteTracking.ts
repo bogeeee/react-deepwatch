@@ -23,6 +23,9 @@ class ObjectWriteListeners {
      */
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
     afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
+    /**
+     * Means, the result of Object.keys will be different after the change. All iterations over the object/arrays's keys or values are informed that there was a change. Individual {@link afterChangeProperty_listeners} are not affected!
+     */
     afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
     /**
      * These will always be called, no matter how specific a change is

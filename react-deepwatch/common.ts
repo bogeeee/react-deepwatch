@@ -134,7 +134,7 @@ export function checkEsRuntimeBehaviour() {
         })
         read(tester(proxy));
 
-        !expectedMethodsOrFields.some(mf => !usedMethodsOrFields.has(mf)) || throwError(new Error(`The javascript runtime is not behaving as expected. Please report this as a bug along with your javascript runtime (or Browser) version`))
+        !expectedMethodsOrFields.some(mf => mf !== "constructor" && !usedMethodsOrFields.has(mf)) || throwError(new Error(`The javascript runtime is not behaving as expected. Please report this as a bug along with your javascript runtime (or Browser) version`))
     }
     esRuntimeBehaviourAlreadyChecked = true;
 }
