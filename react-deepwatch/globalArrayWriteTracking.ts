@@ -31,7 +31,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
      * Tested with, see dev_generateEsRuntimeBehaviourCheckerCode.ts
      * May include read-only / reader methods
      */
-    static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString"]) as Set<ObjKey>;
+    static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString", "unshift", "splice", "copyWithin", "reverse"]) as Set<ObjKey>;
 
     /**
      * Non-high level
@@ -91,20 +91,6 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
         return result;
     }
 
-    reverse(...args: any[]): T[] {
-        //@ts-ignore
-        const result = super.reverse(...args);
-        this._fireAfterUnspecificWrite();
-        return result;
-    }
-
-    //@ts-ignore
-    copyWithin(...args: any[]): Array<T> {
-        //@ts-ignore
-        const result = super.copyWithin(...args);
-        this._fireAfterUnspecificWrite();
-        return result;
-    }
 
     //@ts-ignore
     fill(...args: any[]): Array<T> {
@@ -114,17 +100,4 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
         return result;
     }
 
-    splice(...args: any[]): T[] {
-        //@ts-ignore
-        const result = super.splice(...args);
-        this._fireAfterUnspecificWrite();
-        return result;
-    }
-
-    //@ts-ignore
-    unshift(...items): number {
-        const result = super.unshift(...items);
-        this._fireAfterUnspecificWrite();
-        return result;
-    }
 }

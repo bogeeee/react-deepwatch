@@ -23,7 +23,10 @@ outputExpecterCode(["a", "b", "b"], (v) => v.reduce((p, c ) => p + c));
 outputExpecterCode(["a", "b", "b"], (v) => v.reduceRight((p, c) => p + c));
 outputExpecterCode(["a", "b", "b"], (v) => v.toLocaleString());
 outputExpecterCode(["a", "b", "b"], (v) => v.toString());
-
+outputExpecterCode(["a", "b", "c"], (v) => v.unshift("_a","_b"));
+outputExpecterCode(["a", "b", "c","d"], v => v.splice(1,2, "newB", "newC", "newX"))
+outputExpecterCode(["a", "b", "c","d"], v => v.copyWithin(3, 1,3))
+outputExpecterCode(["a", "b", "c","d"], v => v.reverse())
 /**
  *
  */

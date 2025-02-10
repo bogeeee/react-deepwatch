@@ -158,14 +158,15 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                     return supervisorClass.prototype[key];
                 }
             }
-            else if(supervisorClass.knownHighLevelMethods.has(key)) {
-                // no special handling
-            }
             else {
                 const origValue = supervisorClass.prototype[key]
-                if(typeof origValue === "function" && !supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not handled directly by supervisor class?
-                    origWriterMethod = origValue;
-                    return trapForGenericWriterMethod // Assume the worst, that it is a writer method
+                if(typeof origValue === "function") {
+                    origMethod = origValue;
+                    if (supervisorClass.knownHighLevelMethods.has(key)) {
+                        return trapForHighLevelWriterMethod
+                    } else if (!supervisorClass.readOnlyMethods.has(key) && !(key as any in Object.prototype)) { // Read-write method that was not handled directly by supervisor class?
+                        return trapForGenericWriterMethod // Assume the worst, that it is a writer method
+                    }
                 }
             }
         }
@@ -184,7 +185,7 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
             return result;
         }
 
-        var origWriterMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
+        var origMethod: ((this:unknown, ...args:unknown[]) => unknown) | undefined = undefined;
        /**
          * Calls the afterUnspecificWrite listeners
          * @param args
@@ -194,10 +195,23 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                 //throw new Error("Invalid state. Method was called on invalid target")
             }
             return runAndCallListenersOnce_after(target, (callListeners) => {
-                const callResult = origWriterMethod!.apply(this, args);  // call original method
+                const callResult = origMethod!.apply(this, args);  // call original method
                 callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterUnspecificWrite); // Call listeners
                 callListeners(writeListenersForObject.get(target as Array<unknown>)?.afterAnyWrite_listeners); // Call listeners
                 return callResult;
+            });
+        }
+
+        /**
+         * Wraps it in runAndCallListenersOnce_after
+         * @param args
+         */
+        function trapForHighLevelWriterMethod(this:object, ...args: unknown[]) {
+            if(this !== receiver) {
+                //throw new Error("Invalid state. Method was called on invalid target")
+            }
+            return runAndCallListenersOnce_after(target, (callListeners) => {
+                return origMethod!.apply(this, args);  // call original method
             });
         }
     }
