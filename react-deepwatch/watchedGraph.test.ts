@@ -889,6 +889,18 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
+    testRecordReadAndWatch("array.unshift", () => {return {
+        origObj: ["a", "b", "c"],
+        readerFn: (obj: string[]) =>  read(obj[0]),
+        writerFn: (obj: string[]) =>  obj.unshift("_a","_b"),
+    }});
+
+    testRecordReadAndWatch("array.unshift with .length", () => {return {
+            origObj: ["a", "b", "c"],
+            readerFn: (obj: string[]) =>  read(obj.length),
+            writerFn: (obj: string[]) =>  obj.unshift("_a","_b"),
+    }});
+
     /* Template:
     testRecordReadAndWatch("xxx", () => {
         const obj: {} = {};
@@ -945,8 +957,41 @@ describe('WatchedGraph integrity', () => {
     },"arrays with gaps");
 
 
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c"],
+        writerFn: (obj: string[]) => {
+            expect(obj.unshift("_a","_b")).toBe(5);
+            expect([...obj]).toEqual(["_a","_b", "a", "b", "c"]);
+        }}
+    },"array.unshift");
 
-    // TODO: unshift, spice, fill, copywithin, reverse
+
+
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c","d"],
+        writerFn: (obj: string[]) => {
+            expect(obj.splice(1,2, "newB", "newC", "newX")).toEqual(["b","c"]);
+            expect([...obj]).toEqual(["a", "newB", "newC", "newX", "d"]);
+        }}
+    },"array.splice");
+
+
+
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c","d"] as any[],
+        writerFn: (obj: string[]) => {
+            expect([...obj.copyWithin(3, 1,3)]).toEqual(["a", "b", "c","b"]);
+            expect(obj.length).toBe(4);
+        }}
+    },"array.copyWithin");
+
+    testWriterConsitency(() => {return {
+        origObj: ["a", "b", "c","d"] as any[],
+        writerFn: (obj: string[]) => {
+            expect([...obj.reverse()]).toEqual(["d", "c", "b","a"]);
+            expect([...obj]).toEqual(["d", "c", "b","a"]);
+        }}
+    },"array.reverse");
 
 });
 
