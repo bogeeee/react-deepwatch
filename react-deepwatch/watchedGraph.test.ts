@@ -508,7 +508,7 @@ describe('WatchedGraph record read and watch it', () => {
             testWriterConsitency(provideTestSetup as any);
         }
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
-            for (const mode of ["With writes from inside", "With writes from outside", "with write from another WatchedGraph"]) {
+            for (const mode of ["With writes through WatchedGraph proxy", "With writes through installed write tracker", "With writes through 2 nested WatchedGraph facades"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
                     const testSetup = provideTestSetup();
 
@@ -531,13 +531,13 @@ describe('WatchedGraph record read and watch it', () => {
                         const changeHandler = vitest.fn(() => {
                             const i = 0; // set breakpoint here
                         });
-                        if (mode === "With writes from inside") {
+                        if (mode === "With writes through WatchedGraph proxy") {
                             lastRead.onChange(changeHandler);
                             testSetup.writerFn!(proxy);
-                        } else if (mode === "With writes from outside") {
+                        } else if (mode === "With writes through installed write tracker") {
                             lastRead.onChange(changeHandler, true);
                             testSetup.writerFn!(origObj);
-                        } else if (mode === "with write from another WatchedGraph") {
+                        } else if (mode === "With writes through 2 nested WatchedGraph facades") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
@@ -562,13 +562,13 @@ describe('WatchedGraph record read and watch it', () => {
                         const changeHandler = vitest.fn(() => {
                             const i = 0; // set breakpoint here
                         });
-                        if (mode === "With writes from inside") {
+                        if (mode === "With writes through WatchedGraph proxy") {
                             lastRead.onChange(changeHandler);
                             testSetup.falseWritesFn!(proxy);
-                        } else if (mode === "With writes from outside") {
+                        } else if (mode === "With writes through installed write tracker") {
                             lastRead.onChange(changeHandler, true);
                             testSetup.falseWritesFn!(origObj);
-                        } else if (mode === "with write from another WatchedGraph") {
+                        } else if (mode === "With writes through 2 nested WatchedGraph facades") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
@@ -594,13 +594,13 @@ describe('WatchedGraph record read and watch it', () => {
                             const i = 0;// set breakpoint here
                         });
 
-                        if (mode === "With writes from inside") {
+                        if (mode === "With writes through WatchedGraph proxy") {
                             lastRead.onChange(changeHandler);
                             testSetup.writerFn!(proxy);
-                        } else if (mode === "With writes from outside") {
+                        } else if (mode === "With writes through installed write tracker") {
                             lastRead.onChange(changeHandler, true);
                             testSetup.writerFn!(origObj);
-                        } else if (mode === "with write from another WatchedGraph") {
+                        } else if (mode === "With writes through 2 nested WatchedGraph facades") {
                             lastRead.onChange(changeHandler, true);
                             let watchedGraph2 = new WatchedGraph();
                             const proxy2 = watchedGraph2.getProxyFor(origObj);
@@ -1014,18 +1014,18 @@ function enhanceWithWriteTrackerDeep(obj: object) {
  * @param provideTestSetup
  */
 function testWriterConsitency<T extends object>(provideTestSetup: () => {origObj: T, writerFn: (obj: T) => void}, name?: string) {
-    for (const mode of ["With writes from inside", "With writes from outside"]) {
+    for (const mode of ["With writes through WatchedGraph proxy", "With writes through installed write tracker"]) {
         test(`WriterFn ${name || fnToString(provideTestSetup().writerFn)} should behave normally. ${mode}`, () => {
             const origForCompareTestSetup = provideTestSetup();
             origForCompareTestSetup.writerFn(origForCompareTestSetup.origObj);
 
-            if (mode === "With writes from inside") {
+            if (mode === "With writes through WatchedGraph proxy") {
                 const testSetup = provideTestSetup();
                 const proxy = new WatchedGraph().getProxyFor(testSetup.origObj)
                 testSetup.writerFn(proxy);
                 expect(_.isEqual(proxy, origForCompareTestSetup.origObj)).toBeTruthy();
                 expect(_.isEqual(testSetup.origObj, origForCompareTestSetup.origObj)).toBeTruthy();
-            } else if (mode === "With writes from outside") {
+            } else if (mode === "With writes through installed write tracker") {
                 const testSetup = provideTestSetup();
                 const proxy = new WatchedGraph().getProxyFor(testSetup.origObj);
                 enhanceWithWriteTrackerDeep(testSetup.origObj);
