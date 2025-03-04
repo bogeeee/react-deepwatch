@@ -901,13 +901,89 @@ describe('WatchedGraph record read and watch it', () => {
             writerFn: (obj: string[]) =>  obj.unshift("_a","_b"),
     }});
 
+    // TODO: is the result of i.e. array.unshift a proxy as well?
+
+    testRecordReadAndWatch<Set<unknown>>("Set.add", () => {
+        const obj: Set<string> = new Set<string>;
+        return {
+            origObj: obj,
+            readerFn: (obj) => obj.has("a"),
+            writerFn: (obj) => obj.add("a"),
+            falseReadFn: (obj) => {obj.has("b")},
+            falseWritesFn: (obj) => {obj.add("b")}
+        }
+    });
+
+    testRecordReadAndWatch<Set<unknown>>("Set.add as non-change (value already exists)", () => {
+        const obj: Set<string> = new Set<string>(["a", "b"]);
+        return {
+            origObj: obj,
+            readerFn: (obj) => obj.has("a"),
+            falseWritesFn: (obj) => {obj.add("a")}
+        }
+    });
+
+    const iterateSetFns: ((obj: Set<unknown>) => void)[] = [obj => obj.keys(), obj => obj.values(), obj => obj.forEach(x => read(x)), obj => {for(const o of obj) read(o)}, obj => read(obj.size)];
+    const changeSetFns:((obj: Set<unknown>) => void)[] = [obj => obj.add("d"), obj => obj.delete("b"), obj => obj.clear()]
+    for(const readerFn of iterateSetFns) {
+        for(const writerFn of changeSetFns) {
+            testRecordReadAndWatch<Set<unknown>>(`Iterate set: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
+                return {
+                    origObj: new Set<string>(["a", "b"]),
+                    readerFn,
+                    writerFn
+                }
+            });
+        }
+    }
+
+
+    testRecordReadAndWatch<Map<unknown, unknown>>("Map.has with Map.set", () => {
+        const obj: Map<string,string> = new Map<string,string>;
+        return {
+            origObj: obj,
+            readerFn: (obj) => obj.has("a"),
+            writerFn: (obj) => obj.set("a", {}),
+            falseReadFn: (obj) => {obj.has("b")},
+            falseWritesFn: (obj) => {obj.set("b", "c")}
+        }
+    });
+
+    testRecordReadAndWatch<Map<string, unknown>>("Map.get with Map.set", () => {
+        const obj: Map<string,string> = new Map<string,string>([["a","valueA"], ["b","valueB"]]);
+        return {
+            origObj: obj,
+            readerFn: (obj) => expect(obj.get("a")).toBe("valueA"),
+            writerFn: (obj) => obj.set("a", {val: "somethingElse"}),
+            falseReadFn: (obj) => {obj.has("b"); obj.get("b")},
+            falseWritesFn: (obj) => {obj.set("a", "valueA")} // No actual change
+        }
+    });
+
+    const iterateMapFns: ((obj: Map<unknown, unknown>) => void)[] = [obj => obj.keys(), obj => obj.values(), obj => obj.forEach(x => read(x)), obj => {for(const o of obj) read(o)}, obj => read(obj.size)];
+    const changeMapFns:((obj: Map<unknown, unknown>) => void)[] = [obj => obj.set("d", {}), obj => obj.delete("b"), obj => obj.clear()]
+    for(const readerFn of iterateMapFns) {
+        for(const writerFn of changeMapFns) {
+            testRecordReadAndWatch<Map<unknown, unknown>>(`Iterate map: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
+                return {
+                    origObj: new Map<string,unknown>([["a","valueA"], ["b",{some: "valueB"}]]),
+                    readerFn,
+                    writerFn,
+                    falseWritesFn: obj => obj.set("a", "differentValue")
+                }
+            });
+        }
+    }
+
+
+
     /* Template:
     testRecordReadAndWatch("xxx", () => {
         const obj: {} = {};
         return {
             origObj: obj,
             readerFn: (obj) => {...},
-            writerFn: (obj) => () => {...},
+            writerFn: (obj) => {...},
             falseReadFn: (obj) => {},
             falseWritesFn: (obj) => {}
         }
