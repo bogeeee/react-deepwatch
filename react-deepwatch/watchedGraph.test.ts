@@ -777,23 +777,24 @@ describe('WatchedGraph record read and watch it', () => {
         });
     }
 
+    const arrayIteratorFns: ((arr: Array<unknown>) => void)[] = [arr => {for(const val of arr) read(val)}, ];
     const arrayChangeFns = [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => {arr[1] = 123}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)];
     // Value iteration:
-    for(const mode of [{name: "For...of", readerFn: (obj: Array<unknown>) => {for(const val of obj) read(val)}}]) {
+    for(const readerFn of arrayIteratorFns) {
         for(const writerFn of arrayChangeFns ) {
-            testRecordReadAndWatch(`Arrays with ${mode.name} with ${fnToString(writerFn)}`, () => {
+            testRecordReadAndWatch(`Arrays with ${fnToString(readerFn)}} with ${fnToString(writerFn)}`, () => {
                 return {
                     origObj: ["a", 1, 2, {}],
-                    readerFn: mode.readerFn,
+                    readerFn,
                     writerFn
                 }
             });
         }
 
-        testRecordReadAndWatch(`Arrays with ${mode.name} with false writes`, () => {
+        testRecordReadAndWatch(`Arrays with ${fnToString(readerFn)}} with false writes`, () => {
             return {
                 origObj: ["a", 1, 2, {}],
-                readerFn: mode.readerFn,
+                readerFn,
                 falseWritesFn: (arr) => {arr[0] = "a";}
             }
         });
