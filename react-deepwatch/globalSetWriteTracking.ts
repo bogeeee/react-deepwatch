@@ -1,4 +1,7 @@
-import {AfterWriteListener, DualUseTracker} from "./common";
+import {AfterWriteListener, DualUseTracker, ObjKey, runAndCallListenersOnce_after} from "./common";
+import {writeListenersForObject} from "./globalObjectWriteTracking";
+import {MapSet} from "./Util";
+import {v} from "vitest/dist/reporters-yx5ZTtEV";
 
 
 /**
@@ -7,7 +10,8 @@ import {AfterWriteListener, DualUseTracker} from "./common";
  * {@link ObjectWriteListeners} are also subscribed on Sets
  */
 class SetWriteListeners {
-    afterUnspecificWrite = new Set<AfterWriteListener>
+    afterSpecificValueChanged = new MapSet<unknown, AfterWriteListener>();
+    afterAnyValueChanged = new Set<AfterWriteListener>();
 }
 
 export const writeListenersForSet = new WeakMap<Set<unknown>, SetWriteListeners>();
@@ -25,12 +29,29 @@ export function getWriteListenersForSet(set: Set<unknown>) {
  */
 export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>{
 
+    /**
+     * Built-in Methods, which are using fields / calling methods on the proxy transparently/loyally, so those methods don't call/use internal stuff directly.
+     * Tested with, see dev_generateEsRuntimeBehaviourCheckerCode.ts
+     * May include read-only / reader methods
+     */
+    static knownHighLevelMethods = new Set<keyof Set<unknown>>([]) as Set<ObjKey>;
 
-    // TODO: In the future, implement more fine granular change listeners that act on change of a certain index.
+    /**
+     * Non-high level
+     */
+    static readOnlyMethods = new Set<keyof Set<unknown>>(["keys", "values", "entries"]) as Set<ObjKey>;
+
+    /**
+     * Non-high level
+     */
+    static readOnlyFields = new Set<keyof Set<unknown>>(["size"]) as Set<ObjKey>;
 
 
     protected _fireAfterUnspecificWrite() {
-        writeListenersForSet.get(this._target)?.afterUnspecificWrite.forEach(l => l());
+        runAndCallListenersOnce_after(this._target, (callListeners) => {
+            callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this._target)?.afterAnyWrite_listeners);
+        });
     }
 
     /**
@@ -45,6 +66,37 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
      */
     get ["constructor"]() {
         return Set;
+    }
+
+    add(value:T): this {
+        if(this._target.has(value)) { // No change?
+            return this;
+        }
+        runAndCallListenersOnce_after(this._target, (callListeners) => {
+            const result = this._target.add(value);
+            callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
+            callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
+        });
+        return this;
+    }
+
+    delete(value: T): boolean {
+        const result = this._target.delete(value);
+        if(result) { // deleted?
+            runAndCallListenersOnce_after(this._target, (callListeners) => {
+                callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
+                callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
+            });
+        }
+        return result
+    }
+
+    clear() {
+        runAndCallListenersOnce_after(this._target, (callListeners) => {
+            this._target.clear();
+            callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
+            callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
+        });
     }
 
 }

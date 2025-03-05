@@ -150,3 +150,15 @@ export function read(value: any) {
         throw new Error("should never get here")
     }
 }
+
+export function arraysAreShallowlyEqual(a: unknown[], b: unknown[]) {
+    if(a.length !== b.length) {
+        return false;
+    }
+    for(let i = 0;i<a.length;i++) {
+        if(a[i] !== b[i]) { // TODO add option for object instance equality
+            return false;
+        }
+    }
+    return true;
+}

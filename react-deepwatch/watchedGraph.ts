@@ -1,5 +1,5 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
-import {arraysAreEqualsByPredicateFn, MapSet} from "./Util";
+import {arraysAreEqualsByPredicateFn, arraysAreShallowlyEqual, MapSet} from "./Util";
 import {
     enhanceWithWriteTracker,
     getWriteTrackerClassFor,
@@ -16,6 +16,7 @@ import {
 } from "./common";
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
 import _ from "underscore"
+import {getWriteListenersForSet, writeListenersForSet, WriteTrackedSet} from "./globalSetWriteTracking";
 
 
 export abstract class RecordedRead {
@@ -210,83 +211,92 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
             return false;
         }
 
-        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.arraysAreShallowlyEqual(this.values, other.values);
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && arraysAreShallowlyEqual(this.values, other.values);
     }
 
     get isChanged(): boolean {
-        return this.arraysAreShallowlyEqual(this.values, this.origObj);
+        return arraysAreShallowlyEqual(this.values, this.origObj);
     }
 
-    arraysAreShallowlyEqual(a: unknown[], b: unknown[]) {
-        if(a.length !== b.length) {
+
+}
+
+export class RecordedSet_has extends RecordedReadOnProxiedObject {
+    value!: unknown;
+    obj!: Set<unknown>;
+
+
+    constructor(value: unknown) {
+        super();
+        this.value = value;
+    }
+
+    get isChanged() {
+        return this.obj.has(this.value);
+    }
+
+    onChange(listener: () => void, trackOriginal=false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.obj);
+        }
+        getWriteListenersForSet(this.obj).afterSpecificValueChanged.add(this.value, listener);
+        getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        writeListenersForSet.get(this.obj)?.afterSpecificValueChanged.delete(this.value, listener);
+        writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
+
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedSet_has)) {
             return false;
         }
-        for(let i = 0;i<a.length;i++) {
-            if(a[i] !== b[i]) { // TODO add option for object instance equality
-                return false;
-            }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.value === other.value;
+    }
+}
+
+export class RecordedSetValuesRead extends RecordedReadOnProxiedObject {
+    values: Array<unknown>;
+
+    protected get origObj() {
+        return this.obj as Set<unknown>;
+    }
+
+
+    constructor(values: Array<unknown>) {
+        super();
+        this.values = values;
+    }
+
+    onChange(listener: () => void, trackOriginal =false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.origObj);
         }
-        return true;
-    }
-}
-
-export class RecordedSet_has extends RecordedRead {
-    proxyHandler?: WatchedGraphHandler
-    obj: Set<any>;
-    key: any;
-    value: boolean;
-
-    /**
-     * Possibly we could live without it and use events only in load.canReusePreviousResult
-     */
-    get isChanged(): boolean {
-        throw new Error("TODO");
-    }
-
-    constructor() {
-        super();
-        throw new Error("TODO");
-    }
-
-    onChange(listener: () => void, trackOriginal = false) {
-        throw new Error("TODO");
+        getWriteListenersForSet(this.origObj).afterAnyValueChanged.add(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
     }
 
     offChange(listener: () => void) {
-        throw new Error("TODO");
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForSet(this.origObj).afterAnyValueChanged.delete(listener);
     }
 
     equals(other: RecordedRead): boolean {
-        throw new Error("TODO");
-    }
-}
+        if(! (other instanceof RecordedSetValuesRead)) {
+            return false;
+        }
 
-export class RecordedSet_values extends RecordedRead {
-    proxyHandler?: WatchedGraphHandler
-    obj: Set<any>;
-    value: any[];
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && arraysAreShallowlyEqual(this.values, other.values);
+    }
 
     get isChanged(): boolean {
-        throw new Error("TODO");
-    }
-
-    constructor() {
-        super();
-        throw new Error("TODO");
-    }
-
-    onChange(listener: () => void, trackOriginal = false) {
-        throw new Error("TODO");
-    }
-
-    offChange(listener: () => void) {
-        throw new Error("TODO");
-    }
-
-    equals(other: RecordedRead): boolean {
-        throw new Error("TODO");
+        return arraysAreShallowlyEqual(this.values, [...(this.origObj as Set<unknown>).values()]);
     }
 }
+
 //TODO ...
 
 export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]) {
@@ -473,12 +483,84 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
 
 }
 
+class WatchedSet_for_WatchedGraphHandler<T> extends Set<T> implements ForWatchedGraphHandler<Set<T>> {
+    get _watchedGraphHandler(): WatchedGraphHandler {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the handler when called through the handler
+    }
+    get _target(): Set<T> {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the value when called through the handler
+    }
+
+    protected _fireAfterValuesRead() {
+        let recordedSetValuesRead = new RecordedSetValuesRead([...this._target]);
+        this._watchedGraphHandler?.fireAfterRead(recordedSetValuesRead);
+    }
+
+    /**
+     * Pretend that this is a Set
+     */
+    get ["constructor"]() {
+        return Set;
+    }
+
+    has(value:T): boolean {
+        const result = this._target.has(value);
+
+        const read = new RecordedSet_has(value);
+        this._watchedGraphHandler?.fireAfterRead(read);
+
+        return result;
+    }
+
+    values(): SetIterator<T> {
+        const result = this._target.values();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    entries(): SetIterator<[T, T]> {
+        const result = this._target.entries();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    keys(): SetIterator<T> {
+        const result = this._target.keys();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    [Symbol.iterator](): SetIterator<T> {
+        const result = this._target[Symbol.iterator]();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    get size(): number {
+        const result = this._target.size;
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    /**
+     * Keep this method so it it treated as handled and not as making-unspecific-reads
+     * @param args
+     */
+    forEach(...args: any[]) {
+        //@ts-ignore
+        return super.forEach(...args); //reads "length" an thererfore triggers the read
+    }
+
+
+}
+
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     /**
      * Classes for watchers / write-trackers
      */
     static supervisorClassesMap = new Map<Clazz, WatchedGraphHandler["supervisorClasses"]>([
-        [Array, {watcher: WatchedArray_for_WatchedGraphHandler, writeTracker: WriteTrackedArray}]
+        [Array, {watcher: WatchedArray_for_WatchedGraphHandler, writeTracker: WriteTrackedArray}],
+        [Set, {watcher: WatchedSet_for_WatchedGraphHandler, writeTracker: WriteTrackedSet}]
     ]);
     
     /**
