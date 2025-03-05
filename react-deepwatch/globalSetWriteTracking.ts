@@ -73,7 +73,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
             return this;
         }
         runAndCallListenersOnce_after(this._target, (callListeners) => {
-            const result = this._target.add(value);
+            const result = Set.prototype.add.apply(this._target, [value]); // this.add(value); receiver for .add must be the real/nonproxied Set
             callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
             callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
         });
@@ -81,7 +81,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
     }
 
     delete(value: T): boolean {
-        const result = this._target.delete(value);
+        const result = Set.prototype.delete.apply(this._target, [value]); // this.delete(value); receiver for .delete must be the real/nonproxied Set
         if(result) { // deleted?
             runAndCallListenersOnce_after(this._target, (callListeners) => {
                 callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
@@ -93,7 +93,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
 
     clear() {
         runAndCallListenersOnce_after(this._target, (callListeners) => {
-            this._target.clear();
+            Set.prototype.clear.apply(this._target, []); // this.clear(); receiver for .clear must be the real/nonproxied Set
             callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
             callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
         });
