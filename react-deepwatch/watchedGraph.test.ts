@@ -505,8 +505,15 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
+    const testRecordedRead_isChanged_alreadyHandled = new Set<(obj: unknown) => void>();
     function testRecordedRead_isChanged<T extends object>(provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void}) {
         const testSetup = provideTestSetup()
+
+        if(testRecordedRead_isChanged_alreadyHandled.has(testSetup.readerFn)) { // Already handled?
+            return;
+        }
+        testRecordedRead_isChanged_alreadyHandled.add(testSetup.readerFn);
+
         test(`${fnToString(testSetup.readerFn)}: All RecordedRead#isChanged should stay false`, () => {
             let watchedGraph = new WatchedGraph();
             const proxy = watchedGraph.getProxyFor(testSetup.origObj);
