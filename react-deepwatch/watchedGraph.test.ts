@@ -979,20 +979,61 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
-    const iterateMapFns: ((map: Map<unknown, unknown>) => void)[] = [map => map.keys(), map => map.values(), map => map.forEach(x => read(x)), map => {for(const o of map) read(o)}, map => read(map.size)];
-    const changeMapFns:((map: Map<unknown, unknown>) => void)[] = [map => map.set("d", {}), map => map.delete("b"), map => map.clear()]
-    for(const readerFn of iterateMapFns) {
-        for(const writerFn of changeMapFns) {
-            testRecordReadAndWatch<Map<unknown, unknown>>(`Iterate map: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
-                return {
-                    origObj: new Map<string,unknown>([["a","valueA"], ["b",{some: "valueB"}]]),
-                    readerFn,
-                    writerFn,
-                    falseWritesFn: obj => obj.set("a", "differentValue")
-                }
-            });
+    {
+        const createOrigMap = () => new Map<string,unknown>([["a","valueA"], ["b",{some: "valueB"}]]);
+        const changeMapFns:((map: Map<unknown, unknown>) => void)[] = [map => map.set("d", {}), map => map.delete("b"), map => map.clear()]
+
+        const iterateMapKeysFns: ((map: Map<unknown, unknown>) => void)[] = [map => map.keys(), map => read(map.size)];
+        for(const readerFn of iterateMapKeysFns) {
+            for(const writerFn of changeMapFns) {
+                testRecordReadAndWatch<Map<unknown, unknown>>(`Iterate map keys: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
+                    return {
+                        origObj: createOrigMap(),
+                        readerFn,
+                        writerFn,
+                        falseWritesFn: obj => obj.set("a", "differentValue")
+                    }
+                });
+            }
+        }
+
+        const iterateMapValuesFns: ((map: Map<unknown, unknown>) => void)[] = [map => map.values(), map => map.forEach(x => read(x)), map => {for(const o of map) read(o)}];
+        for(const readerFn of iterateMapValuesFns) {
+            for(const writerFn of changeMapFns) {
+                testRecordReadAndWatch<Map<unknown, unknown>>(`Iterate map values: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
+                    return {
+                        origObj: createOrigMap(),
+                        readerFn,
+                        writerFn,
+                    }
+                });
+            }
         }
     }
+
+
+    testRecordReadAndWatch<Map<unknown, unknown>>("Map.keys() (more fine granualar)", () => {
+        const map: Map<string,string> = new Map<string,string>([["keyA", "valueA"], ["keyB", "valueB"]]);
+        return {
+            origObj: map,
+            readerFn: (map) => read(map.keys()),
+            writerFn: (map) => map.set("keyC", "valueC"),
+            falseReadFn: (map) => {map.has("keyX")},
+            falseWritesFn: (map) => {map.set("keyA", "differentVALUE")} // only the value differs
+        }
+    });
+
+    testRecordReadAndWatch<Map<unknown, unknown>>("Map.values() (more fine granualar)", () => {
+        const map: Map<string,string> = new Map<string,string>([["keyA", "valueA"], ["keyB", "valueB"]]);
+        return {
+            origObj: map,
+            readerFn: (map) => read(map.values()),
+            writerFn: (map) => map.set("keyA", "newValue"),
+            falseWritesFn: (map) => {map.set("keyA", "valueA")},
+        }
+    });
+
+    // TODO: self infect / querying if Set/Map has a key should unbox the key. Same for all all values, also arrays and objects!?
 
 
 
