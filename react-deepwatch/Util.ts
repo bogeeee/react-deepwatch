@@ -162,3 +162,23 @@ export function arraysAreShallowlyEqual(a: unknown[], b: unknown[]) {
     }
     return true;
 }
+
+/**
+ * Like arraysAreShallowlyEqual but this time for an array of entries (tuple of 2 values) like from Map#entries()
+ * @param a
+ * @param b
+ */
+export function arraysWithEntriesAreShallowlyEqual(a: Array<[unknown, unknown]>, b: Array<[unknown, unknown]>) {
+    if(a.length !== b.length) {
+        return false;
+    }
+    for(let i = 0;i<a.length;i++) {
+        if(a[i][0] !== b[i][0]) { // TODO add option for object instance equality
+            return false;
+        }
+        if(a[i][1] !== b[i][1]) { // TODO add option for object instance equality
+            return false;
+        }
+    }
+    return true;
+}

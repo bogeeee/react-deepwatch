@@ -7,6 +7,7 @@ import {WriteTrackedArray} from "./globalArrayWriteTracking";
 import {AfterWriteListener, Clazz, ObjKey, runAndCallListenersOnce_after} from "./common";
 import {ObjectProxyHandler, writeListenersForObject} from "./globalObjectWriteTracking";
 import {WriteTrackedSet} from "./globalSetWriteTracking";
+import {WriteTrackedMap} from "./globalMapWriteTracking";
 
 
 const enhancedObjects = new WeakSet<object>();
@@ -14,7 +15,7 @@ const enhancedObjects = new WeakSet<object>();
 /**
  * Register them here
  */
-export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedSet<unknown>/* TODO: Map */]);
+export const writeTrackerClasses: Set<Clazz> = new Set([WriteTrackedSet, WriteTrackedMap]);
 
 /**
  * Maps the original class to the watcher class

@@ -1,5 +1,10 @@
 import {GraphProxyHandler, ProxiedGraph} from "./proxiedGraph";
-import {arraysAreEqualsByPredicateFn, arraysAreShallowlyEqual, MapSet} from "./Util";
+import {
+    arraysAreEqualsByPredicateFn,
+    arraysAreShallowlyEqual,
+    arraysWithEntriesAreShallowlyEqual,
+    MapSet
+} from "./Util";
 import {
     enhanceWithWriteTracker,
     getWriteTrackerClassFor,
@@ -17,6 +22,7 @@ import {
 import {getWriteListenersForObject, writeListenersForObject} from "./globalObjectWriteTracking";
 import _ from "underscore"
 import {getWriteListenersForSet, writeListenersForSet, WriteTrackedSet} from "./globalSetWriteTracking";
+import {getWriteListenersForMap, writeListenersForMap, WriteTrackedMap} from "./globalMapWriteTracking";
 
 
 export abstract class RecordedRead {
@@ -304,7 +310,213 @@ export class RecordedSetValuesRead extends RecordedReadOnProxiedObject {
     }
 }
 
-//TODO ...
+export class RecordedMap_get extends RecordedReadOnProxiedObject {
+    key!: unknown;
+
+    keyExists: boolean;
+    /**
+     * Result of the .get call
+     */
+    value: unknown;
+    obj!: Map<unknown, unknown>;
+
+
+    constructor(key: unknown, keyExists: boolean, value: unknown) {
+        super();
+        this.key = key;
+        this.keyExists = keyExists;
+        this.value = value;
+    }
+
+    get isChanged() {
+        return !(this.keyExists === this.obj.has(this.key) && this.value === this.obj.get(this.key));
+    }
+
+    onChange(listener: () => void, trackOriginal=false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.obj);
+        }
+        getWriteListenersForMap(this.obj).afterSpecificKeyAddedOrRemoved.add(this.key, listener);
+        getWriteListenersForMap(this.obj).afterSpecificValueChanged.add(this.key, listener);
+        getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
+        writeListenersForMap.get(this.obj)?.afterSpecificValueChanged.delete(this.key, listener);
+        writeListenersForMap.get(this.obj)?.afterSpecificKeyAddedOrRemoved.delete(this.key, listener);
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedMap_get)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.key === other.key && this.keyExists == other.keyExists && this.value === other.value;
+    }
+}
+
+export class RecordedMap_has extends RecordedReadOnProxiedObject {
+    key!: unknown;
+
+    /**
+     * Result of the .has call
+     */
+    keyExists: boolean;
+    obj!: Map<unknown, unknown>;
+
+
+    constructor(key: unknown, keyExists: boolean) {
+        super();
+        this.key = key;
+        this.keyExists = keyExists;
+    }
+
+    get isChanged() {
+        return this.keyExists !== this.obj.has(this.key);
+    }
+
+    onChange(listener: () => void, trackOriginal=false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.obj);
+        }
+        getWriteListenersForMap(this.obj).afterSpecificKeyAddedOrRemoved.add(this.key, listener);
+        getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
+        writeListenersForMap.get(this.obj)?.afterSpecificKeyAddedOrRemoved.delete(this.key, listener);
+    }
+
+    equals(other: RecordedRead) {
+        if(! (other instanceof RecordedMap_has)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.key === other.key && this.keyExists === other.keyExists;
+    }
+}
+
+export class RecordedMapKeysRead extends RecordedReadOnProxiedObject {
+    keys: Array<unknown>;
+
+    protected get origObj() {
+        return this.obj as Map<unknown, unknown>;
+    }
+
+
+    constructor(keys: Array<unknown>) {
+        super();
+        this.keys = keys;
+    }
+
+    onChange(listener: () => void, trackOriginal =false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.origObj);
+        }
+        getWriteListenersForMap(this.origObj).afterAnyKeyAddedOrRemoved.add(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForMap(this.origObj).afterAnyKeyAddedOrRemoved.delete(listener);
+    }
+
+    equals(other: RecordedRead): boolean {
+        if(! (other instanceof RecordedMapKeysRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && arraysAreShallowlyEqual(this.keys, other.keys);
+    }
+
+    get isChanged(): boolean {
+        return !arraysAreShallowlyEqual(this.keys, [...(this.origObj as Map<unknown, unknown>).keys()]);
+    }
+}
+
+export class RecordedMapValuesRead extends RecordedReadOnProxiedObject {
+    values: Array<unknown>;
+
+    protected get origObj() {
+        return this.obj as Map<unknown, unknown>;
+    }
+
+
+    constructor(values: Array<unknown>) {
+        super();
+        this.values = values;
+    }
+
+    onChange(listener: () => void, trackOriginal =false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.origObj);
+        }
+        getWriteListenersForMap(this.origObj).afterAnyValueChanged.add(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForMap(this.origObj).afterAnyValueChanged.delete(listener);
+    }
+
+    equals(other: RecordedRead): boolean {
+        if(! (other instanceof RecordedMapValuesRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && arraysAreShallowlyEqual(this.values, other.values);
+    }
+
+    get isChanged(): boolean {
+        return !arraysAreShallowlyEqual(this.values, [...(this.origObj as Map<unknown, unknown>).values()]);
+    }
+}
+
+export class RecordedMapEntriesRead extends RecordedReadOnProxiedObject {
+    values: Array<[unknown, unknown]>;
+
+    protected get origObj() {
+        return this.obj as Map<unknown, unknown>;
+    }
+
+
+    constructor(values: Array<[unknown, unknown]>) {
+        super();
+        this.values = values;
+    }
+
+    onChange(listener: () => void, trackOriginal =false) {
+        if(trackOriginal) {
+            enhanceWithWriteTracker(this.origObj);
+        }
+        getWriteListenersForMap(this.origObj).afterAnyKeyAddedOrRemoved.add(listener);
+        getWriteListenersForMap(this.origObj).afterAnyValueChanged.add(listener);
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
+    }
+
+    offChange(listener: () => void) {
+        getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForMap(this.origObj).afterAnyValueChanged.delete(listener);
+        getWriteListenersForMap(this.origObj).afterAnyKeyAddedOrRemoved.delete(listener);
+    }
+
+    equals(other: RecordedRead): boolean {
+        if(! (other instanceof RecordedMapEntriesRead)) {
+            return false;
+        }
+
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && arraysWithEntriesAreShallowlyEqual(this.values, other.values);
+    }
+
+    get isChanged(): boolean {
+        return !arraysWithEntriesAreShallowlyEqual(this.values, [...(this.origObj as Map<unknown, unknown>).entries()]);
+    }
+}
+
 
 export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]) {
     return arraysAreEqualsByPredicateFn(a, b, (a, b) => a.equals(b) );
@@ -563,13 +775,100 @@ class WatchedSet_for_WatchedGraphHandler<T> extends Set<T> implements ForWatched
     }
 }
 
+class WatchedMap_for_WatchedGraphHandler<K,V> extends Map<K, V> implements ForWatchedGraphHandler<Map<K, V>> {
+    get _watchedGraphHandler(): WatchedGraphHandler {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the handler when called through the handler
+    }
+    get _target(): Map<K,V> {
+        throw new Error("not calling from inside a WatchedGraphHandler"); // Will return the value when called through the handler
+    }
+
+    protected _fireAfterEntriesRead() {
+        let recordedMapEntriesRead = new RecordedMapEntriesRead([...this._target.entries()]);
+        this._watchedGraphHandler?.fireAfterRead(recordedMapEntriesRead);
+    }
+
+    /**
+     * Pretend that this is a Map
+     */
+    get ["constructor"]() {
+        return Map;
+    }
+
+    get(key:K): V | undefined {
+        const keyExists = this._target.has(key);
+        const result = this._target.get(key);
+
+        const read = new RecordedMap_get(key, keyExists, result);
+        this._watchedGraphHandler?.fireAfterRead(read);
+
+        return result;
+    }
+
+    has(key:K): boolean {
+        const result = this._target.has(key);
+
+        const read = new RecordedMap_has(key, result);
+        this._watchedGraphHandler?.fireAfterRead(read);
+
+        return result;
+    }
+
+    values(): MapIterator<V> {
+        const result = this._target.values();
+
+        let recordedMapValuesRead = new RecordedMapValuesRead([...result]);
+        this._watchedGraphHandler?.fireAfterRead(recordedMapValuesRead);
+
+        return result;
+    }
+
+    entries(): MapIterator<[K, V]> {
+        const result = this._target.entries();
+        this._fireAfterEntriesRead();
+        return result;
+    }
+
+    keys(): MapIterator<K> {
+        const result = this._target.keys();
+
+        let recordedMapKeysRead = new RecordedMapKeysRead([...result]);
+        this._watchedGraphHandler?.fireAfterRead(recordedMapKeysRead);
+        
+        return result;
+    }
+
+    forEach(...args: unknown[]) {
+        //@ts-ignore
+        const result = this._target.forEach(...args);
+        this._fireAfterEntriesRead();
+        return result;
+    }
+
+    [Symbol.iterator](): MapIterator<[K,V]> {
+        const result = this._target[Symbol.iterator]();
+        this._fireAfterEntriesRead();
+        return result;
+    }
+
+    get size(): number {
+        const result = this._target.size;
+
+        let recordedMapKeysRead = new RecordedMapKeysRead([...this._target.keys()]); // TODO: RecordedMapSizeRead
+        this._watchedGraphHandler?.fireAfterRead(recordedMapKeysRead);
+        
+        return result;
+    }
+}
+
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
     /**
      * Classes for watchers / write-trackers
      */
     static supervisorClassesMap = new Map<Clazz, WatchedGraphHandler["supervisorClasses"]>([
         [Array, {watcher: WatchedArray_for_WatchedGraphHandler, writeTracker: WriteTrackedArray}],
-        [Set, {watcher: WatchedSet_for_WatchedGraphHandler, writeTracker: WriteTrackedSet}]
+        [Set, {watcher: WatchedSet_for_WatchedGraphHandler, writeTracker: WriteTrackedSet}],
+        [Map, {watcher: WatchedMap_for_WatchedGraphHandler, writeTracker: WriteTrackedMap}]
     ]);
     
     /**
