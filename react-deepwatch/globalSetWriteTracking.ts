@@ -39,12 +39,17 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
     /**
      * Non-high level
      */
-    static readOnlyMethods = new Set<keyof Set<unknown>>(["keys", "values", "entries"]) as Set<ObjKey>;
+    static readOnlyMethods = new Set<keyof Set<unknown>>([]) as Set<ObjKey>;
 
     /**
      * Non-high level
      */
     static readOnlyFields = new Set<keyof Set<unknown>>(["size"]) as Set<ObjKey>;
+
+    /**
+     * Default, if not listed as high-level method
+     */
+    static receiverMustBeNonProxied = true;
 
 
     protected _fireAfterUnspecificWrite() {
@@ -76,6 +81,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
             const result = Set.prototype.add.apply(this._target, [value]); // this.add(value); receiver for .add must be the real/nonproxied Set
             callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
             callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
+            callListeners(writeListenersForObject.get(this._target)?.afterAnyWrite_listeners);
         });
         return this;
     }
@@ -86,6 +92,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
             runAndCallListenersOnce_after(this._target, (callListeners) => {
                 callListeners(writeListenersForSet.get(this._target)?.afterSpecificValueChanged.get(value));
                 callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
+                callListeners(writeListenersForObject.get(this._target)?.afterAnyWrite_listeners);
             });
         }
         return result
@@ -96,6 +103,7 @@ export class WriteTrackedSet<T> extends Set<T> implements DualUseTracker<Set<T>>
             Set.prototype.clear.apply(this._target, []); // this.clear(); receiver for .clear must be the real/nonproxied Set
             callListeners(writeListenersForSet.get(this._target)?.afterAnyValueChanged);
             callListeners(writeListenersForObject.get(this._target)?.afterUnspecificWrite);
+            callListeners(writeListenersForObject.get(this._target)?.afterAnyWrite_listeners);
         });
     }
 

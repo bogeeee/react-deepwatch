@@ -80,7 +80,7 @@ export function runAndCallListenersOnce_after<R>(forTarget: object, collectorFn:
     }
 }
 
-export type WriteTrackerClass = Clazz & {knownHighLevelMethods: Set<ObjKey>, readOnlyMethods: Set<ObjKey>, readOnlyFields: Set<ObjKey> };
+export type WriteTrackerClass = Clazz & {knownHighLevelMethods: Set<ObjKey>, readOnlyMethods: Set<ObjKey>, readOnlyFields: Set<ObjKey>, receiverMustBeNonProxied: boolean};
 
 let esRuntimeBehaviourAlreadyChecked = false;
 

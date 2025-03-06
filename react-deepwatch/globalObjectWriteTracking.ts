@@ -31,8 +31,13 @@ class ObjectWriteListeners {
     afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
     /**
      * These will always be called, no matter how specific a change is
+     * TODO: rename to afterAnyChange?
      */
     afterAnyWrite_listeners = new Set<()=>void>();
+
+    /**
+     * TODO: rename to afterUnspecificChange
+     */
     afterUnspecificWrite = new Set<AfterWriteListener>();
 }
 

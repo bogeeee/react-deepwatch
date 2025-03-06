@@ -27,6 +27,13 @@ outputExpecterCode(["a", "b", "c"], (v) => v.unshift("_a","_b"));
 outputExpecterCode(["a", "b", "c","d"], v => v.splice(1,2, "newB", "newC", "newX"))
 outputExpecterCode(["a", "b", "c","d"], v => v.copyWithin(3, 1,3))
 outputExpecterCode(["a", "b", "c","d"], v => v.reverse())
+
+// Set:
+//outputExpecterCode(new Set<string>(["a","b","c"]), v => v.forEach(i => read(i))) // TypeError: Method Set.prototype.forEach called on incompatible receiver #<Set>
+//outputExpecterCode(new Set<string>(["a","b","c"]), v => v.intersection(new Set<string>(["b","c","e"]))) // TypeError: Method Set.prototype.intersection called on incompatible receiver #<Set>
+
+
+
 /**
  *
  */
