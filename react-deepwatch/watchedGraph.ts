@@ -217,7 +217,7 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
     }
 
     get isChanged(): boolean {
-        return arraysAreShallowlyEqual(this.values, this.origObj);
+        return !arraysAreShallowlyEqual(this.values, this.origObj);
     }
 
 
@@ -225,16 +225,21 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
 
 export class RecordedSet_has extends RecordedReadOnProxiedObject {
     value!: unknown;
+    /**
+     * Result of the .has call
+     */
+    result: boolean;
     obj!: Set<unknown>;
 
 
-    constructor(value: unknown) {
+    constructor(value: unknown, result: boolean) {
         super();
         this.value = value;
+        this.result = result;
     }
 
     get isChanged() {
-        return this.obj.has(this.value);
+        return this.result !== this.obj.has(this.value);
     }
 
     onChange(listener: () => void, trackOriginal=false) {
@@ -295,7 +300,7 @@ export class RecordedSetValuesRead extends RecordedReadOnProxiedObject {
     }
 
     get isChanged(): boolean {
-        return arraysAreShallowlyEqual(this.values, [...(this.origObj as Set<unknown>).values()]);
+        return !arraysAreShallowlyEqual(this.values, [...(this.origObj as Set<unknown>).values()]);
     }
 }
 
@@ -514,7 +519,7 @@ class WatchedSet_for_WatchedGraphHandler<T> extends Set<T> implements ForWatched
     has(value:T): boolean {
         const result = this._target.has(value);
 
-        const read = new RecordedSet_has(value);
+        const read = new RecordedSet_has(value, result);
         this._watchedGraphHandler?.fireAfterRead(read);
 
         return result;
