@@ -169,6 +169,7 @@ describe('ProxiedGraph tests', () => {
         expect(proxy.prop).toStrictEqual(orig.prop);
     })
 
+    // TODO: Array, Set and Map's Iterators, keys(), values(), etc. methods must return proxied objects as well
 });
 
 describe('ProxiedGraph and direct enhancement tests', () => {
@@ -919,8 +920,8 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
-    const iterateSetFns: ((obj: Set<unknown>) => void)[] = [obj => obj.keys(), obj => obj.values(), obj => obj.forEach(x => read(x)), obj => {for(const o of obj) read(o)}, obj => read(obj.size)];
-    const changeSetFns:((obj: Set<unknown>) => void)[] = [obj => obj.add("d"), obj => obj.delete("b"), obj => obj.clear()]
+    const iterateSetFns: ((set: Set<unknown>) => void)[] = [set => set.keys(), set => set.values(), set => set.forEach(x => read(x)), set => {for(const o of set) read(o)}, set => read(set.size)];
+    const changeSetFns:((set: Set<unknown>) => void)[] = [set => set.add("d"), set => set.delete("b"), set => set.clear()]
     for(const readerFn of iterateSetFns) {
         for(const writerFn of changeSetFns) {
             testRecordReadAndWatch<Set<unknown>>(`Iterate set: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
@@ -956,8 +957,8 @@ describe('WatchedGraph record read and watch it', () => {
         }
     });
 
-    const iterateMapFns: ((obj: Map<unknown, unknown>) => void)[] = [obj => obj.keys(), obj => obj.values(), obj => obj.forEach(x => read(x)), obj => {for(const o of obj) read(o)}, obj => read(obj.size)];
-    const changeMapFns:((obj: Map<unknown, unknown>) => void)[] = [obj => obj.set("d", {}), obj => obj.delete("b"), obj => obj.clear()]
+    const iterateMapFns: ((map: Map<unknown, unknown>) => void)[] = [map => map.keys(), map => map.values(), map => map.forEach(x => read(x)), map => {for(const o of map) read(o)}, map => read(map.size)];
+    const changeMapFns:((map: Map<unknown, unknown>) => void)[] = [map => map.set("d", {}), map => map.delete("b"), map => map.clear()]
     for(const readerFn of iterateMapFns) {
         for(const writerFn of changeMapFns) {
             testRecordReadAndWatch<Map<unknown, unknown>>(`Iterate map: ${fnToString(readerFn)} with ${fnToString(writerFn)}`, () => {
