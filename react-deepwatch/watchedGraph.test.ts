@@ -12,6 +12,7 @@ import {Clazz, ObjKey} from "./common";
 import {deleteProperty, enhanceWithWriteTracker} from "./globalWriteTracking";
 import {ProxiedGraph} from "./proxiedGraph";
 import exp from "constants";
+import {fail} from "assert";
 
 beforeEach(() => {
 
@@ -504,10 +505,31 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
+    function testRecordedRead_isChanged<T extends object>(provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void}) {
+        const testSetup = provideTestSetup()
+        test(`${fnToString(testSetup.readerFn)}: All RecordedRead#isChanged should stay false`, () => {
+            let watchedGraph = new WatchedGraph();
+            const proxy = watchedGraph.getProxyFor(testSetup.origObj);
+            let reads: RecordedPropertyRead[] = [];
+            watchedGraph.onAfterRead(r => reads.push(r as RecordedPropertyRead));
+            testSetup.readerFn!(proxy);
+            reads.forEach(read => {
+                if(read.isChanged) {
+                    read.isChanged; // set breakpoint here
+                    fail(`${read.constructor.name}.isChanged returned true`)
+                }
+            });
+        });
+    }
+
     function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean, pickRead?: Clazz}) {
+        if(provideTestSetup().readerFn && !provideTestSetup().skipTestReadsAreEqual) {
+            testRecordedRead_isChanged(provideTestSetup as any);
+        }
         if(provideTestSetup().writerFn) {
             testWriterConsitency(provideTestSetup as any);
         }
+
         for(const withNestedFacade of [false/*, true nested facades compatibility not implemented */]) {
             for (const mode of ["With writes through WatchedGraph proxy", "With writes through installed write tracker", "With writes through 2 nested WatchedGraph facades"]) {
                 test(`${name} ${withNestedFacade?" With nested facade. ":""} ${mode}`, () => {
