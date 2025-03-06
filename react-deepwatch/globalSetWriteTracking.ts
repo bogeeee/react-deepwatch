@@ -1,7 +1,6 @@
 import {AfterWriteListener, DualUseTracker, ObjKey, runAndCallListenersOnce_after} from "./common";
 import {writeListenersForObject} from "./globalObjectWriteTracking";
 import {MapSet} from "./Util";
-import {v} from "vitest/dist/reporters-yx5ZTtEV";
 
 
 /**

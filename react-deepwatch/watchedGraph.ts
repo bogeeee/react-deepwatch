@@ -267,7 +267,7 @@ export class RecordedSet_has extends RecordedReadOnProxiedObject {
             return false;
         }
 
-        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.value === other.value;
+        return this.proxyHandler === other.proxyHandler && this.obj === other.obj && this.value === other.value && this.result === other.result;
     }
 }
 
