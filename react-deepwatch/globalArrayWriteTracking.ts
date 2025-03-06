@@ -34,14 +34,19 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
     static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString", "unshift", "splice", "copyWithin", "reverse"]) as Set<ObjKey>;
 
     /**
-     * Non-high level
+     * Non-high level. These fire `RecordedUnspecificRead`s then. So better implement them instead to fire i.e RecordedArrayValuesRead.
      */
-    static readOnlyMethods = new Set<keyof Array<unknown>>(["keys", "values", "entries"]) as Set<ObjKey>;
+    static readOnlyMethods = new Set<keyof Array<unknown>>(["keys" /* TODO: Implement .keys, mind, that it is different to RecordedOwnKeysRead which allows gaps*/]) as Set<ObjKey>;
 
     /**
-     * Non-high level
+     * Non-high level. Same as above: better implement them
      */
-    static readOnlyFields = new Set<keyof Array<unknown>>(["length", Symbol.unscopables]) as Set<ObjKey>;
+    static readOnlyFields = new Set<keyof Array<unknown>>([Symbol.unscopables]) as Set<ObjKey>;
+
+    /**
+     * Default, if not listed as high-level method
+     */
+    static receiverMustBeNonProxied = false;
 
     // TODO: In the future, implement more fine granular change listeners that act on change of a certain index.
 

@@ -94,7 +94,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
         if(trackOriginal) {
             enhanceWithWriteTracker(this.obj); // Performance TODO: Install a setter trap ONLY for the property of interest. See ObjectProxyHandler#installSetterTrap
         }
-        getWriteListenersForObject(this.obj).afterChangeProperty_listeners.add(this.key, listener);
+        getWriteListenersForObject(this.obj).afterChangeSpecificProperty_listeners.add(this.key, listener);
         if(Array.isArray(this.obj)) {
             getWriteListenersForObject(this.obj).afterUnspecificWrite.add(listener);
         }
@@ -102,7 +102,7 @@ export class RecordedPropertyRead extends RecordedReadOnProxiedObject{
     }
 
     offChange(listener: () => void) {
-        writeListenersForObject.get(this.obj)?.afterChangeProperty_listeners.delete(this.key, listener);
+        writeListenersForObject.get(this.obj)?.afterChangeSpecificProperty_listeners.delete(this.key, listener);
         if(Array.isArray(this.obj)) {
             writeListenersForObject.get(this.obj)?.afterUnspecificWrite.delete(listener);
         }
@@ -198,11 +198,13 @@ export class RecordedArrayValuesRead extends RecordedReadOnProxiedObject {
             enhanceWithWriteTracker(this.origObj);
         }
         getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.add(listener);
+        getWriteListenersForObject(this.origObj).afterChangeAnyProperty_listeners.add(listener);
         getWriteListenersForObject(this.origObj).afterUnspecificWrite.add(listener);
     }
 
     offChange(listener: () => void) {
         getWriteListenersForObject(this.origObj).afterUnspecificWrite.delete(listener);
+        getWriteListenersForObject(this.origObj).afterChangeAnyProperty_listeners.delete(listener);
         getWriteListenersForObject(this.origObj).afterChangeOwnKeys_listeners.delete(listener);
     }
     
@@ -362,7 +364,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
             throw new Error("TODO");
         }
         else {
-            getWriteListenersForObject(obj).afterChangeProperty_listeners.add(key as ObjKey, listener);
+            getWriteListenersForObject(obj).afterChangeSpecificProperty_listeners.add(key as ObjKey, listener);
         }
 
     }
@@ -379,7 +381,7 @@ export class WatchedGraph extends ProxiedGraph<WatchedGraphHandler> {
             throw new Error("TODO");
         }
         else {
-            writeListenersForObject.get(obj)?.afterChangeProperty_listeners.add(key as ObjKey, listener);
+            writeListenersForObject.get(obj)?.afterChangeSpecificProperty_listeners.add(key as ObjKey, listener);
         }
     }
 
@@ -425,6 +427,12 @@ class WatchedArray_for_WatchedGraphHandler<T> extends Array<T> implements ForWat
 
     values(): ArrayIterator<T> {
         const result = this._target.values();
+        this._fireAfterValuesRead();
+        return result;
+    }
+
+    entries(): ArrayIterator<[number, T]> {
+        const result = this._target.entries();
         this._fireAfterValuesRead();
         return result;
     }
@@ -541,17 +549,6 @@ class WatchedSet_for_WatchedGraphHandler<T> extends Set<T> implements ForWatched
         this._fireAfterValuesRead();
         return result;
     }
-
-    /**
-     * Keep this method so it it treated as handled and not as making-unspecific-reads
-     * @param args
-     */
-    forEach(...args: any[]) {
-        //@ts-ignore
-        return super.forEach(...args); //reads "length" an thererfore triggers the read
-    }
-
-
 }
 
 export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
@@ -687,7 +684,8 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
                     callListeners(writeListenersForObject.get(this.target)?.afterUnspecificWrite);
                 }
                 const writeListeners = writeListenersForObject.get(this.target);
-                callListeners(writeListeners?.afterChangeProperty_listeners.get(key));
+                callListeners(writeListeners?.afterChangeSpecificProperty_listeners.get(key));
+                callListeners(writeListeners?.afterChangeAnyProperty_listeners);
                 if (isNewProperty) {
                     callListeners(writeListeners?.afterChangeOwnKeys_listeners);
                 }

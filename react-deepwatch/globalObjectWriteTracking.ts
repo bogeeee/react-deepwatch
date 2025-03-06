@@ -22,9 +22,11 @@ class ObjectWriteListeners {
      * For writes on **setters** (also if these are the same/unchanged values)
      */
     afterSetterInvoke_listeners = new MapSet<ObjKey, AfterWriteListener>();
-    afterChangeProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
+    afterChangeSpecificProperty_listeners = new MapSet<ObjKey, AfterWriteListener>();
+    afterChangeAnyProperty_listeners = new Set<AfterWriteListener>();
+
     /**
-     * Means, the result of Object.keys will be different after the change. All iterations over the object/arrays's keys or values are informed that there was a change. Individual {@link afterChangeProperty_listeners} are not affected!
+     * Means, the result of Object.keys will be different after the change. All iterations over the object/arrays's keys or values are informed that there was a change. Individual {@link afterChangeSpecificProperty_listeners} are not affected!
      */
     afterChangeOwnKeys_listeners = new Set<AfterChangeOwnKeysListener>();
     /**
@@ -111,7 +113,8 @@ export class ObjectProxyHandler implements ProxyHandler<object> {
                     if(Array.isArray(target)) {
                         callListeners(writeListenersForObject.get(target)?.afterUnspecificWrite);
                     }
-                    callListeners(writeListenersForTarget?.afterChangeProperty_listeners.get(key))
+                    callListeners(writeListenersForTarget?.afterChangeSpecificProperty_listeners.get(key))
+                    callListeners(writeListenersForTarget?.afterChangeAnyProperty_listeners)
                     callListeners(writeListenersForTarget?.afterAnyWrite_listeners)
                 }
             });

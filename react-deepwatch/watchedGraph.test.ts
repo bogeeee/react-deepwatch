@@ -503,7 +503,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean, pickReader?: Clazz}) {
+    function testRecordReadAndWatch<T extends object>(name: string, provideTestSetup: () => {origObj: T, readerFn?: (obj: T) => void, writerFn?: (obj: T) => void, falseReadFn?: (obj: T) => void, falseWritesFn?: (obj: T) => void, skipTestReadsAreEqual?: boolean, pickRead?: Clazz}) {
         if(provideTestSetup().writerFn) {
             testWriterConsitency(provideTestSetup as any);
         }
@@ -645,7 +645,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
 
         function getLastRead(reads: RecordedRead[], testSetup: ReturnType<typeof provideTestSetup>) {
-            const r = testSetup.pickReader?reads.filter(r => r instanceof testSetup.pickReader!):reads;
+            const r = testSetup.pickRead?reads.filter(r => r instanceof testSetup.pickRead!):reads;
             expect(r.length).toBeGreaterThan(0);
             return r[r.length - 1];
         }
@@ -777,16 +777,19 @@ describe('WatchedGraph record read and watch it', () => {
         });
     }
 
-    const arrayIteratorFns: ((arr: Array<unknown>) => void)[] = [arr => {for(const val of arr) read(val)}, ];
+    const arrayIteratorFns: {readerFn: ((arr: Array<unknown>) => void), skipTestReadsAreEqual?: boolean, pickRead?: Clazz}[] = [{readerFn: arr => {for(const val of arr) read(val)}}, {readerFn:arr => read(arr.keys()), skipTestReadsAreEqual: true}, {readerFn:arr => read(arr.values())}, {readerFn:arr => read(arr.entries())}, {readerFn:arr => arr.forEach(v => read(v)), pickRead: RecordedArrayValuesRead}];
     const arrayChangeFns = [(arr: Array<unknown>) => {arr.push("b")}, (arr:Array<unknown>) => {arr[1] = 123}, (arr:Array<unknown>) => arr.pop(), (arr: Array<unknown>) => arr[4] = "new", (arr: Array<unknown>) => arr[6] = "new", (arr: Array<unknown>) => deleteProperty(arr, 0)];
     // Value iteration:
-    for(const readerFn of arrayIteratorFns) {
+    for(const it of arrayIteratorFns) {
+        const readerFn = it.readerFn
         for(const writerFn of arrayChangeFns ) {
             testRecordReadAndWatch(`Arrays with ${fnToString(readerFn)}} with ${fnToString(writerFn)}`, () => {
                 return {
                     origObj: ["a", 1, 2, {}],
                     readerFn,
-                    writerFn
+                    writerFn,
+                    skipTestReadsAreEqual: it.skipTestReadsAreEqual,
+                    pickRead: it.pickRead,
                 }
             });
         }
@@ -795,17 +798,9 @@ describe('WatchedGraph record read and watch it', () => {
             return {
                 origObj: ["a", 1, 2, {}],
                 readerFn,
-                falseWritesFn: (arr) => {arr[0] = "a";}
-            }
-        });
-    }
-    for (const writerFn of arrayChangeFns) {
-        testRecordReadAndWatch(`Arrays with forEach with ${fnToString(writerFn)}`, () => {
-            return {
-                origObj: ["a", 1, 2, {}],
-                readerFn: (obj: Array<unknown>) => obj.forEach(v => read(v)  ),
-                writerFn,
-                pickReader: RecordedArrayValuesRead
+                falseWritesFn: (arr) => {arr[0] = "a";},
+                skipTestReadsAreEqual: it.skipTestReadsAreEqual,
+                pickRead: it.pickRead,
             }
         });
     }
