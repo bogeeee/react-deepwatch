@@ -505,7 +505,7 @@ describe('WatchedGraph record read and watch it', () => {
         }
     }
 
-    const testRecordedRead_isChanged_alreadyHandled = new Set<(obj: unknown) => void>();
+    const testRecordedRead_isChanged_alreadyHandled = new Set<(obj: any) => void>();
     function testRecordedRead_isChanged<T extends object>(provideTestSetup: () => {origObj: T, readerFn: (obj: T) => void}) {
         const testSetup = provideTestSetup()
 
@@ -1136,6 +1136,224 @@ describe('WatchedGraph integrity', () => {
         }}
     },"array.reverse");
 
+
+    testWriterConsitency(() => {return {
+        origObj: new Set<string>(),
+        writerFn: (set: Set<string>) => {
+            set.add("a");set.add("b");set.add("a");
+            expect(set.has("a")).toBeTruthy();
+            expect(set.has("c")).toBeFalsy();
+            expect(set.size).toEqual(2);
+            expect([...set.keys()]).toEqual(["a","b"]);
+            expect([...set.values()]).toEqual(["a","b"]);
+            expect([...set.entries()]).toEqual([["a", "a"],["b","b"]]);
+            expect(set[Symbol.iterator]().next().value).toEqual("a");
+            const res: string[] = [];
+            set.forEach(v => res.push(v));
+            expect(res).toEqual(["a","b"]);
+            expect(set.delete("c")).toBeFalsy();
+            expect(set.size).toEqual(2);
+            expect(set.delete("b")).toBeTruthy();
+            expect(set.size).toEqual(1);
+            set.clear();
+            expect(set.size).toEqual(0);
+        }}
+    },"Set");
+
+});
+
+describe("Returning proxies", () => {
+    class WgUtils {
+        watchedGraph: WatchedGraph
+
+        constructor(watchedGraph: WatchedGraph) {
+            this.watchedGraph = watchedGraph;
+        }
+
+        expectProxy(obj: object) {
+            if (this.watchedGraph.getProxyFor(obj) !== obj) {
+                fail("obj is not a proxy");
+            }
+        }
+
+        expectNonProxy(obj: object) {
+            if (this.watchedGraph.getProxyFor(obj) === obj) {
+                fail("obj is a proxy");
+            }
+        }
+    }
+
+    test("Object properties should be proxies", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const orig = {
+            prop: {child: "initialValue"} as object,
+
+            get byAccessor() {
+                return this.prop;
+            },
+
+            set byAccessor(value: object) {
+                this.prop = value;
+            },
+
+            setProp(value: object) {
+                this.prop = value;
+            }
+        }
+        const proxyedObj = watchedGraph.getProxyFor(orig);
+        utils.expectProxy(proxyedObj);
+        utils.expectProxy(proxyedObj.prop);
+
+        // setting non-proxied
+        proxyedObj.prop = {child: "newValue"}
+        utils.expectProxy(proxyedObj.prop);
+        utils.expectNonProxy(orig.prop);
+
+        // setting proxied
+        proxyedObj.prop = watchedGraph.getProxyFor({child: "newValue"})
+        utils.expectProxy(proxyedObj.prop);
+        utils.expectNonProxy(orig.prop);
+
+        utils.expectProxy(proxyedObj.byAccessor);
+        proxyedObj.byAccessor= {child: "newValue"}
+        utils.expectProxy(proxyedObj.prop)
+        utils.expectNonProxy(orig.prop)
+
+        proxyedObj.byAccessor= watchedGraph.getProxyFor({child: "newValue"})
+        utils.expectProxy(proxyedObj.prop)
+        utils.expectNonProxy(orig.prop)
+
+        proxyedObj.setProp({child: "newValue"})
+        utils.expectProxy(proxyedObj.prop)
+        utils.expectNonProxy(orig.prop)
+
+        proxyedObj.setProp(watchedGraph.getProxyFor({child: "newValue"}))
+        utils.expectProxy(proxyedObj.prop)
+        utils.expectNonProxy(orig.prop)
+    })
+
+    test("User methods should return proxies", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const orig = {
+            someObj: {some: "value"},
+            userMethod() {
+                return this.someObj
+            },
+
+            equalsSomeObject(candidate: object) {
+                return this.someObj === candidate;
+            }
+        }
+        const proxy = watchedGraph.getProxyFor(orig);
+        utils.expectProxy(proxy);
+        utils.expectProxy(proxy.someObj);
+        utils.expectProxy(proxy.userMethod());
+
+        expect(proxy.equalsSomeObject(proxy.someObj)).toBeTruthy(); // Behaviour should be consistent
+    })
+
+    test("Array should return proxies", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const obj1 = {};
+        const obj2 = {};
+        const orig = [obj1,obj2]
+        const proxy = watchedGraph.getProxyFor(orig);
+        utils.expectProxy(proxy);
+        utils.expectProxy(proxy[0]);
+        proxy.push({x: "123"})
+        utils.expectProxy(proxy[2]);
+        utils.expectNonProxy(orig[2]);
+        proxy.push(proxy[0]); // add again
+        utils.expectNonProxy(orig[3]);
+        utils.expectProxy(orig.pop()!);
+    })
+
+
+
+
+    test("Setting properties on an object should not self-infect", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const orig = {
+            someObj: {some: "value"} as object,
+            setSomeObj(value: object) {
+                this.someObj = value;
+            },
+        }
+        const proxy = watchedGraph.getProxyFor(orig);
+
+        const anotherObj = {prop: "another"};
+        proxy.setSomeObj(anotherObj);
+        utils.expectNonProxy(orig.someObj);
+        utils.expectProxy(proxy.someObj);
+
+        proxy.setSomeObj(watchedGraph.getProxyFor(anotherObj));
+        utils.expectNonProxy(orig.someObj);
+        utils.expectProxy(proxy.someObj);
+    })
+
+    test("Proxies with set", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const origSet = new Set<object>();
+        const proxyedSet = watchedGraph.getProxyFor(origSet);
+
+        const storedObjOrig = {some: "value"};
+        const storedObjectProxy = watchedGraph.getProxyFor(storedObjOrig);
+        proxyedSet.add(storedObjectProxy);
+        utils.expectNonProxy(origSet.keys().next().value!);
+        utils.expectNonProxy(origSet.values().next().value!);
+        utils.expectProxy(proxyedSet.values().next().value!);
+        utils.expectProxy(proxyedSet.entries().next().value!);
+        utils.expectProxy([...proxyedSet][0]);
+
+        expect(proxyedSet.has(storedObjectProxy)).toBeTruthy()
+        expect(proxyedSet.has(storedObjOrig)).toBeFalsy();
+
+        // TODO: baseline 2024 methods (intersection, ...)
+    })
+
+    test("Proxies with map", () => {
+        const watchedGraph = new WatchedGraph();
+        const utils = new WgUtils(watchedGraph);
+
+        const origMap = new Map<object,object>();
+        const proxyedMap = watchedGraph.getProxyFor(origMap);
+
+        const origValue = {some: "value"};
+        const valueProxy = watchedGraph.getProxyFor(origValue);
+
+        const origKey = {some: "theKey"};
+        const keyProxy = watchedGraph.getProxyFor(origKey);
+
+        proxyedMap.set(origKey, origValue);
+        utils.expectNonProxy(origMap.keys().next().value!);
+        utils.expectNonProxy(origMap.values().next().value!);
+        expect(origMap.has(origKey)).toBeTruthy();
+        expect(origMap.has(keyProxy)).toBeFalsy();
+        expect(proxyedMap.has(keyProxy)).toBeTruthy();
+        utils.expectProxy(proxyedMap.get(keyProxy)!);
+
+        utils.expectProxy([...proxyedMap.values()][0]);
+        utils.expectProxy([...proxyedMap.keys()][0]);
+        utils.expectProxy(proxyedMap.entries().next().value![0]);
+        utils.expectProxy(proxyedMap.entries().next().value![1]);
+        proxyedMap.forEach((value, key) => {
+            utils.expectProxy(value);
+            utils.expectProxy(key);
+        })
+        utils.expectProxy([...proxyedMap][0][0]); // First key
+        utils.expectProxy([...proxyedMap][0][1]); // first value
+
+    })
 });
 
 function fnToString(fn: (...args: any[]) => unknown) {
