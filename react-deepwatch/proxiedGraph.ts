@@ -41,6 +41,19 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
         return handlerForObj.proxy as O;
     }
 
+    /**
+     *
+     * @param value
+     * @return the original non-proxied value
+     */
+    getUnproxiedValue<O>(value: O): O {
+        if(value === null || typeof value !== "object") { // not an object?
+            return value;
+        }
+
+        return proxyToProxyHandler.get(value)?.target as O|| value;
+    }
+
     getHandlerFor(obj: object) {
         return getProxyHandler(this.getProxyFor(obj)) as HANDLER;
     }
@@ -118,17 +131,18 @@ export abstract class GraphProxyHandler<GRAPH extends ProxiedGraph<any>> impleme
             setter.apply(this.proxy,[value]); // Only call the accessor with a proxied this
         }
         else {
+            const unproxiedValue = this.graph.getUnproxiedValue(value);
             //@ts-ignore
-            if (this.target[p] !== value) { // modify ?
-                this.rawChange(p, value);
+            if (this.target[p] !== unproxiedValue) { // modify ?
+                this.rawChange(p, unproxiedValue);
             }
         }
         return true
     }
 
-    protected rawChange(p: string | symbol, newValue: any) {
+    protected rawChange(p: string | symbol, newUnproxiedValue: any) {
         //@ts-ignore
-        this.target[p] = newValue
+        this.target[p] = newUnproxiedValue
     }
 
 

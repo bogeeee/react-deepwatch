@@ -987,10 +987,10 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
         return result;
     }
 
-    protected rawChange(key: string | symbol, newValue: any) {
+    protected rawChange(key: string | symbol, newUnproxiedValue: any) {
         runAndCallListenersOnce_after(this.target, (callListeners) => {
             const isNewProperty = getPropertyDescriptor(this.target, key) === undefined;
-            super.rawChange(key, newValue);
+            super.rawChange(key, newUnproxiedValue);
             if(!objectIsEnhancedWithWriteTracker(this.target)) { // Listeners were not already called ?
                 if(this.isForArray()) {
                     callListeners(writeListenersForObject.get(this.target)?.afterUnspecificWrite);
