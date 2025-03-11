@@ -31,7 +31,7 @@ export class WriteTrackedArray<T> extends Array<T> implements DualUseTracker<Arr
      * Tested with, see dev_generateEsRuntimeBehaviourCheckerCode.ts
      * May include read-only / reader methods
      */
-    static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "reduce", "reduceRight", "toLocaleString", "toString", "unshift", "splice", "copyWithin", "reverse"]) as Set<ObjKey>;
+    static knownHighLevelMethods = new Set<keyof Array<unknown>>(["at", "concat", "map", "forEach", "join", "slice", "some", "filter", "find", "every", "findIndex", "includes", "indexOf", Symbol.iterator, "lastIndexOf", "push", "reduce", "reduceRight", "toLocaleString", "toString", "unshift", "splice", "copyWithin", "reverse"]) as Set<ObjKey>;
 
     /**
      * Non-high level. These fire `RecordedUnspecificRead`s then. So better implement them instead to fire i.e RecordedArrayValuesRead.
