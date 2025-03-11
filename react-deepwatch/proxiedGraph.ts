@@ -22,6 +22,10 @@ export abstract class ProxiedGraph<HANDLER extends GraphProxyHandler<any>> {
             return value;
         }
 
+        if(value instanceof Iterator) {
+            return value; // TODO: Implement Iterator supervisors and remove this line
+        }
+
         if(this.proxies.has(value)) { // Already our proxied object ?
             return value;
         }

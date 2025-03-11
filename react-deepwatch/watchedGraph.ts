@@ -3,7 +3,7 @@ import {
     arraysAreEqualsByPredicateFn,
     arraysAreShallowlyEqual,
     arraysWithEntriesAreShallowlyEqual,
-    MapSet
+    MapSet, throwError
 } from "./Util";
 import {
     enhanceWithWriteTracker,
@@ -917,10 +917,17 @@ export class WatchedGraphHandler extends GraphProxyHandler<WatchedGraph> {
                 if(propOnSupervisor !== undefined) { // Supervisor class is responsible for the property (or method) ?
                     //@ts-ignore
                     if(propOnSupervisor.get) { // Prop is a getter?
-                        return this.graph.getProxyFor(propOnSupervisor.get.apply(this.proxy))
+                        return this.graph.getProxyFor(this.graph.getProxyFor(propOnSupervisor.get.apply(this.proxy)));
                     }
-                    else if(propOnSupervisor.value) { // Prop is a value, meaning a function. (Supervisors don't have fields)
-                        return SupervisorClass.prototype[key];
+                    if(propOnSupervisor.set) { // Prop is a setter ?
+                        throw new Error("setters not yet implemented")
+                    }
+                    else {
+                        typeof propOnSupervisor.value === "function" || throwError(`Accessing supervisor's plain property: ${String(key)}`); // validity check
+                        const supervisorMethod = propOnSupervisor.value;
+                        return function withProxiedResult(this:unknown, ...args: unknown[]) {
+                            return thisHandler.graph.getProxyFor(supervisorMethod.apply(this, args)); // Call and wrap result in a proxy
+                        }
                     }
                 }
             }
