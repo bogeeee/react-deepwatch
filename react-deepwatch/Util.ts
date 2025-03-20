@@ -1,3 +1,5 @@
+import {RecordedRead} from "proxy-facades";
+
 export function throwError(e: string | Error) {
     if(e !== null && e instanceof Error) {
         throw e;
@@ -181,4 +183,8 @@ export function arraysWithEntriesAreShallowlyEqual(a: Array<[unknown, unknown]>,
         }
     }
     return true;
+}
+
+export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]) {
+    return arraysAreEqualsByPredicateFn(a, b, (a, b) => a.equals(b));
 }

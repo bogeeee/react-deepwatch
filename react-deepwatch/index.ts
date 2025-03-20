@@ -1,10 +1,9 @@
 import {
     RecordedRead,
     RecordedReadOnProxiedObject,
-    recordedReadsArraysAreEqual,
     RecordedValueRead,
     WatchedGraph
-} from "./watchedGraph";
+} from "proxy-facades";
 import {arraysAreEqualsByPredicateFn, isObject, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
