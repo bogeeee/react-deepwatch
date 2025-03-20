@@ -3,7 +3,7 @@ import _ from "underscore"
 import {normalizeList, normalizeLists, preserve} from "./preserve";
 import clone from "clone";
 import exp from "constants";
-import {WatchedGraph} from "./watchedGraph";
+import {WatchedProxyFacade} from "./watchedProxyFacade";
 import {enhanceWithWriteTracker} from "./globalWriteTracking";
 
 beforeEach(() => {
@@ -40,7 +40,7 @@ describe('Preserve', () => {
     // Feature not used currently
         {
         name: "ProxiedGraph", proxyOrEnhance<T extends object>(o: T) {
-            return new WatchedGraph().getProxyFor(o)
+            return new WatchedProxyFacade().getProxyFor(o)
         }
     },
     */

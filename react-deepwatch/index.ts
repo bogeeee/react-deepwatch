@@ -2,7 +2,7 @@ import {
     RecordedRead,
     RecordedReadOnProxiedObject,
     RecordedValueRead,
-    WatchedGraph
+    WatchedProxyFacade
 } from "proxy-facades";
 import {arraysAreEqualsByPredicateFn, isObject, PromiseState, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
@@ -10,11 +10,11 @@ import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {enhanceWithWriteTracker} from "./globalWriteTracking";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
 
-export {debug_numberOfPropertyChangeListeners} from "./watchedGraph"; // TODO: Remove before release
+export {debug_numberOfPropertyChangeListeners} from "./watchedProxyFacade"; // TODO: Remove before release
 
-let watchedGraph: WatchedGraph | undefined
-function getWatchedGraph() {
-    return watchedGraph || (watchedGraph = new WatchedGraph()); // Lazy initialize global variable
+let watchedProxyFacade: WatchedProxyFacade | undefined
+function getWatchedProxyFacade() {
+    return watchedProxyFacade || (watchedProxyFacade = new WatchedProxyFacade()); // Lazy initialize global variable
 }
 
 let debug_idGenerator=0;
@@ -312,7 +312,7 @@ class WatchedComponentPersistent {
     /**
      * props of the component. These are saved here in the state (in a non changing object instance), so code inside load call can watch **shallow** props changes on it.
      */
-    watchedProps = getWatchedGraph().getProxyFor({});
+    watchedProps = getWatchedProxyFacade().getProxyFor({});
 
     /**
      * id -> loadCall. Null when there are multiple for that id
@@ -452,10 +452,10 @@ class Frame {
 
     isListeningForChanges = false;
 
-    //watchedGraph= new WatchedGraph();
-    get watchedGraph() {
+    //watchedProxyFacade= new WatchedProxyFacade();
+    get watchedProxyFacade() {
         // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
-        return getWatchedGraph();
+        return getWatchedProxyFacade();
     }
 
     constructor() {
@@ -657,7 +657,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
                 renderRun.recordedReads.push(read);
             };
-            frame.watchedGraph.onAfterRead(readListener)
+            frame.watchedProxyFacade.onAfterRead(readListener)
 
             try {
                 try {
@@ -697,7 +697,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 throw e;
             }
             finally {
-                frame.watchedGraph.offAfterRead(readListener);
+                frame.watchedProxyFacade.offAfterRead(readListener);
             }
         }
         finally {
@@ -730,7 +730,7 @@ type WatchedOptions = {
 
 function watched<T extends object>(obj: T, options?: WatchedOptions): T {
     currentRenderRun || throwError("watched is not used from inside a watchedComponent");
-    return currentRenderRun!.frame.watchedGraph.getProxyFor(obj);
+    return currentRenderRun!.frame.watchedProxyFacade.getProxyFor(obj);
 }
 
 export function useWatchedState(initial: object, options?: WatchedOptions) {
@@ -1083,7 +1083,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         }
     }
 
-    function watched(value: unknown) { return (value !== null && typeof value === "object")?frame.watchedGraph.getProxyFor(value):value }
+    function watched(value: unknown) { return (value !== null && typeof value === "object")?frame.watchedProxyFacade.getProxyFor(value):value }
 
     /**
      *
