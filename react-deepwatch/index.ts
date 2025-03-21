@@ -9,10 +9,7 @@ import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
 
-let watchedProxyFacade: WatchedProxyFacade | undefined
-function getWatchedProxyFacade() {
-    return watchedProxyFacade || (watchedProxyFacade = new WatchedProxyFacade()); // Lazy initialize global variable
-}
+let sharedWatchedProxyFacade: WatchedProxyFacade | undefined
 
 let debug_idGenerator=0;
 
@@ -306,10 +303,16 @@ class LoadCall {
 class WatchedComponentPersistent {
     options: WatchedComponentOptions;
 
+    //watchedProxyFacade= new WatchedProxyFacade();
+    get watchedProxyFacade() {
+        // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
+        return sharedWatchedProxyFacade || (sharedWatchedProxyFacade = new WatchedProxyFacade()); // Lazy initialize global variable
+    }
+
     /**
      * props of the component. These are saved here in the state (in a non changing object instance), so code inside load call can watch **shallow** props changes on it.
      */
-    watchedProps = getWatchedProxyFacade().getProxyFor({});
+    watchedProps = this.watchedProxyFacade.getProxyFor({});
 
     /**
      * id -> loadCall. Null when there are multiple for that id
@@ -448,12 +451,6 @@ class Frame {
     dismissErrorBoundary?: () => void;
 
     isListeningForChanges = false;
-
-    //watchedProxyFacade= new WatchedProxyFacade();
-    get watchedProxyFacade() {
-        // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
-        return getWatchedProxyFacade();
-    }
 
     constructor() {
         this.watchPropertyChange_changeListenerFn = this.watchPropertyChange_changeListenerFn.bind(this); // method is handed over as function but uses "this" inside.
@@ -654,7 +651,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
                 renderRun.recordedReads.push(read);
             };
-            frame.watchedProxyFacade.onAfterRead(readListener)
+            persistent.watchedProxyFacade.onAfterRead(readListener)
 
             try {
                 try {
@@ -694,7 +691,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 throw e;
             }
             finally {
-                frame.watchedProxyFacade.offAfterRead(readListener);
+                persistent.watchedProxyFacade.offAfterRead(readListener);
             }
         }
         finally {
@@ -731,7 +728,7 @@ type WatchedOptions = {
  */
 export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
     currentRenderRun || throwError("watched is not used from inside a watchedComponent");
-    let result = currentRenderRun!.frame.watchedProxyFacade.getProxyFor(obj);
+    let result = currentRenderRun!.frame.persistent.watchedProxyFacade.getProxyFor(obj);
     if(options?.onChange) {
         const facadeForChangeWatching = new WatchedProxyFacade();
         facadeForChangeWatching.onAfterChange((change) => options.onChange!());
@@ -1095,7 +1092,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         }
     }
 
-    function watched(value: unknown) { return (value !== null && typeof value === "object")?frame.watchedProxyFacade.getProxyFor(value):value }
+    function watched(value: unknown) { return (value !== null && typeof value === "object")?persistent.watchedProxyFacade.getProxyFor(value):value }
 
     /**
      *
