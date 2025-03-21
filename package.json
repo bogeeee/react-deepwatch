@@ -2,7 +2,7 @@
   "name": "react-deepwatch-development",
   "version": "1.0.0",
   "dependencies": {
-    "proxy-facades": "^1.0.0"
+    "proxy-facades": "^1.0.3"
   },
   "workspaces": [
     "react-deepwatch",

@@ -1,8 +1,7 @@
 import {v} from "vitest/dist/reporters-yx5ZTtEV";
 import {visitReplace} from "./Util";
 import _ from "underscore";
-import {invalidateObject} from "./proxiedGraph";
-import {deleteProperty} from "./globalWriteTracking";
+import {invalidateObject, deleteProperty} from "proxy-facades";
 
 const normalizeListsHint = `Hint: When this is fetched server data and having duplicate items in a list is intentional, you can pre-process it with the normalizeLists function first. See: import {normalizeLists, normalizeList} from "react-deepwatch"`
 

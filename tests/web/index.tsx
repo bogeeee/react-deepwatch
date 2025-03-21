@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, load, debug_numberOfPropertyChangeListeners, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
+import {watchedComponent, useWatchedState, load, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -342,7 +342,3 @@ function App(props) {
 }
 
 createRoot(document.getElementById("root")).render(<App/>);
-
-setInterval(() => {
-    console.log("Number of change listeners: ", debug_numberOfPropertyChangeListeners)
-}, 500)

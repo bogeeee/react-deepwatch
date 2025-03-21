@@ -2,15 +2,12 @@ import {
     RecordedRead,
     RecordedReadOnProxiedObject,
     RecordedValueRead,
-    WatchedProxyFacade
+    WatchedProxyFacade, installChangeTracker
 } from "proxy-facades";
-import {arraysAreEqualsByPredicateFn, isObject, PromiseState, throwError} from "./Util";
+import {arraysAreEqualsByPredicateFn, isObject, PromiseState, recordedReadsArraysAreEqual, throwError} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
-import {enhanceWithWriteTracker} from "./globalWriteTracking";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
-
-export {debug_numberOfPropertyChangeListeners} from "./watchedProxyFacade"; // TODO: Remove before release
 
 let watchedProxyFacade: WatchedProxyFacade | undefined
 function getWatchedProxyFacade() {
@@ -507,7 +504,7 @@ class Frame {
         if(this.persistent.options.watchOutside !== false) {
             try {
                 if (read instanceof RecordedReadOnProxiedObject) {
-                    enhanceWithWriteTracker(read.obj);
+                    installChangeTracker(read.obj);
                 }
             }
             catch (e) {
@@ -516,8 +513,8 @@ class Frame {
         }
 
         // Re-render on a change of the read value:
-        this.startPropChangeListeningFns.push(() => read.onChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */, this.persistent.options.watchOutside !== false));
-        this.cleanUpPropChangeListenerFns.push(() => read.offChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */));
+        this.startPropChangeListeningFns.push(() => read.onAfterChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */, this.persistent.options.watchOutside !== false));
+        this.cleanUpPropChangeListenerFns.push(() => read.offAfterChange(this.watchPropertyChange_changeListenerFn /* Performance: We're not using an anonymous(=instance-changing) function here */));
     }
 
     protected watchPropertyChange_changeListenerFn() {

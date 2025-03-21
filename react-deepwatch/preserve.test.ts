@@ -2,9 +2,7 @@ import {it, expect, test, beforeEach,describe, vitest, vi} from 'vitest'
 import _ from "underscore"
 import {normalizeList, normalizeLists, preserve} from "./preserve";
 import clone from "clone";
-import exp from "constants";
-import {WatchedProxyFacade} from "./watchedProxyFacade";
-import {enhanceWithWriteTracker} from "./globalWriteTracking";
+import {installChangeTracker} from "proxy-facades";
 
 beforeEach(() => {
 
@@ -46,7 +44,7 @@ describe('Preserve', () => {
     */
     {
         name: "Direct enhancement", proxyOrEnhance<T extends object>(o: T) {
-            enhanceWithWriteTracker(o);
+            installChangeTracker(o);
             return o;
         }
     }]) {
