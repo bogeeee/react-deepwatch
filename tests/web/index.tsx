@@ -307,7 +307,7 @@ const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
 
     return <div>
         <h3>ShouldReactToChildComponentsFormChange</h3>
-        <ShouldReactToChildComponentsFormChange form={state.form} />
+        <ShouldReactToChildComponentsFormChange_Child form={state.form} /> <i>Typing Should print "form changed" in the console</i>
         <div>{JSON.stringify(state)}</div>
     </div>
 });
