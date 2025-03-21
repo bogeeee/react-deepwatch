@@ -293,6 +293,25 @@ const LoadErrorsImmediately = watchedComponent(props => {
 
 });
 
+const ShouldReactToChildComponentsFormChange_Child = (props: {form: {name: string}}) => {
+    return <span>
+        Name: <input type="text" value={props.form.name} onChange={(event) => props.form.name = event.target.value} />
+    </span>
+};
+
+const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
+    const state = useWatchedState({form: {
+            name: "",
+            address: ""
+        }});
+
+    return <div>
+        <h3>ShouldReactToChildComponentsFormChange</h3>
+        <ShouldReactToChildComponentsFormChange form={state.form} />
+        <div>{JSON.stringify(state)}</div>
+    </div>
+});
+
 const ExampleErrorBoundary = (props) => {
     return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>
         {props.children}
@@ -335,6 +354,8 @@ function App(props) {
             </Suspense>
             <hr/>
             <ShouldReLoadIfPropsChange/>
+            <hr/>
+            <ShouldReactToChildComponentsFormChange/>
             <hr/>
             <button onClick={() => switchPoperOff(true)}>Shut down all components!</button>
         </Suspense>
