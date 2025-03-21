@@ -31,11 +31,9 @@ type WatchedComponentOptions = {
     memo?: boolean
 
     /**
-     * TODO
      * Normally, everything that's **taken** from props, {@link useWatchedState} or {@link watched} or load(...)'s result will be returned, wrapped in a proxy that watches for modifications.
-     * So far, so good, this can handle all stuff that's happening inside your component, but the outside world does not have these proxies. For example, when a parent component is not a watchedComponent, and passed in an object (i.e. the model) into this component via props.
+     * So far, so good, this can handle all stuff that's happening **inside** your component, but the outside world does not have these proxies. For example, when a parent component is not a watchedComponent, and passed in an object (i.e. the model) into this component via props.
      * Therefore this component can also **patch** these objects to make them watchable.
-     *
      *
      * <p>Default: true</p>
      */
@@ -54,6 +52,14 @@ type WatchedComponentOptions = {
      * </p>
      */
     preserveProps?: boolean
+
+    /**
+     * Shares a global proxy facade instance for all watchedComponents. This is the more tested and easier to think about option.
+     * Disabling this creates a layer of new proxies for every of your child components. Object instances **inside** your component may still be consistent, but there could be: objInsideMyComponent !== myObjectHandedOverGloballyInSomeOtherWay. Real world use cases have to prove, if this is good way.
+     * Default: true
+     */
+    // Development: Note: Also keep in mind: `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals -> is this a problem? I assume that the component instances/state and therefore the watchedProxyFacades stay the same.
+    useGlobalSharedProxyFacade?: boolean
 }
 
 /**
@@ -303,16 +309,20 @@ class LoadCall {
 class WatchedComponentPersistent {
     options: WatchedComponentOptions;
 
-    //watchedProxyFacade= new WatchedProxyFacade();
+    _nonSharedWatchedProxyFacade?: WatchedProxyFacade;
+
     get watchedProxyFacade() {
-        // Use a global shared instance. Because there's no exclusive state inside the graph/handlers. And state.someObj = state.someObj does not cause us multiple nesting layers of proxies. Still this may not the final choice. When changing this mind also the `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals
+        if(this.options.useGlobalSharedProxyFacade === false) {
+            return this._nonSharedWatchedProxyFacade || (this._nonSharedWatchedProxyFacade = new WatchedProxyFacade());
+        }
+        // Use a global shared instance
         return sharedWatchedProxyFacade || (sharedWatchedProxyFacade = new WatchedProxyFacade()); // Lazy initialize global variable
     }
 
     /**
      * props of the component. These are saved here in the state (in a non changing object instance), so code inside load call can watch **shallow** props changes on it.
      */
-    watchedProps = this.watchedProxyFacade.getProxyFor({});
+    watchedProps: {};
 
     /**
      * id -> loadCall. Null when there are multiple for that id
@@ -399,6 +409,7 @@ class WatchedComponentPersistent {
 
     constructor(options: WatchedComponentOptions) {
         this.options = options;
+        this.watchedProps = this.watchedProxyFacade.getProxyFor({})
     }
 
     /**
