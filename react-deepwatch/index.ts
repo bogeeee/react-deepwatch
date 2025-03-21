@@ -4,7 +4,14 @@ import {
     RecordedValueRead,
     WatchedProxyFacade, installChangeTracker
 } from "proxy-facades";
-import {arraysAreEqualsByPredicateFn, isObject, PromiseState, recordedReadsArraysAreEqual, throwError} from "./Util";
+import {
+    arraysAreEqualsByPredicateFn,
+    isObject,
+    newDefaultMap,
+    PromiseState,
+    recordedReadsArraysAreEqual,
+    throwError
+} from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
@@ -354,6 +361,12 @@ class WatchedComponentPersistent {
 
     onceOnEffectCleanupListeners: (()=>void)[] = [];
 
+    /**
+     * For the <a href="https://github.com/bogeeee/react-deepwatch/blob/main/readme.md#and-less-handing-onchange-listeners-to-child-components">"And less... handing onChange listeners to child components"</a> use case.
+     * We don't want new object instances created, every time watched(..., {onChange:....}) is called. So we assign the proxy facade (see watched function) to the object
+     */
+    object_to_childProxyFacade = newDefaultMap<object, WatchedProxyFacade>(() => new WatchedProxyFacade());
+
     debug_tag?: string;
 
     protected doReRender() {
@@ -516,7 +529,12 @@ class Frame {
                 }
             }
             catch (e) {
-                throw new Error(`Could not enhance the original object to track reads. This can fail, if it was created with some unsupported language constructs (defining read only properties; subclassing Array, Set or Map; ...). You can switch it off via the WatchedComponentOptions#watchOutside flag. I.e: const MyComponent = watchedComponent(props => {...}, {watchOutside: false})`, {cause: e});
+                if((e as Error).message?.startsWith("Cannot install change tracker on a proxy")) { // Hacky way to catch this. TODO: Expose a proper API for it.
+
+                }
+                else {
+                    throw new Error(`Could not enhance the original object to track reads. This can fail, if it was created with some unsupported language constructs (defining read only properties; subclassing Array, Set or Map; ...). You can switch it off via the WatchedComponentOptions#watchOutside flag. I.e: const MyComponent = watchedComponent(props => {...}, {watchOutside: false})`, {cause: e});
+                }
             }
         }
 
@@ -559,6 +577,16 @@ class RenderRun {
     somePending?: Promise<unknown>;
     somePendingAreCritical = false;
 
+    /**
+     * (Additional) effect functions (run after mount. Like with useEffect)
+     */
+    effectFns: (() => void)[] = [];
+
+    /**
+     * (Additional) effect cleanup functions
+     */
+    effectCleanupFns: (() => void)[] = [];
+
     handleRenderFinishedSuccessfully() {
         if(!this.isPassive) {
             // Delete unused loadCalls
@@ -580,6 +608,7 @@ class RenderRun {
     handleEffectSetup() {
         this.frame.persistent.hadASuccessfullMount = true;
         this.frame.startListeningForChanges();
+        this.effectFns.forEach(fn => fn());
     }
 
     /**
@@ -587,6 +616,7 @@ class RenderRun {
      */
     handleEffectCleanup() {
         // Call listeners:
+        this.effectCleanupFns.forEach(fn => fn());
         this.frame.persistent.onceOnEffectCleanupListeners.forEach(fn => fn());
         this.frame.persistent.onceOnEffectCleanupListeners = [];
 
@@ -741,8 +771,13 @@ export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
     currentRenderRun || throwError("watched is not used from inside a watchedComponent");
     let result = currentRenderRun!.frame.persistent.watchedProxyFacade.getProxyFor(obj);
     if(options?.onChange) {
-        const facadeForChangeWatching = new WatchedProxyFacade();
-        facadeForChangeWatching.onAfterChange((change) => options.onChange!());
+        const facadeForChangeWatching = currentRenderRun!.frame.persistent.object_to_childProxyFacade.get(obj);
+
+        // Listen for changes and call options.onChange during component mount:
+        const changeHandler = (changeOperation: any) => options.onChange!()
+        currentRenderRun!.effectFns.push(() => {facadeForChangeWatching.onAfterChange(changeHandler)});
+        currentRenderRun!.effectCleanupFns.push(() => {facadeForChangeWatching.offAfterChange(changeHandler)});
+
         result = facadeForChangeWatching.getProxyFor(result);
     }
     return result;

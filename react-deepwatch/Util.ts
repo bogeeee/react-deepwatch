@@ -188,3 +188,32 @@ export function arraysWithEntriesAreShallowlyEqual(a: Array<[unknown, unknown]>,
 export function recordedReadsArraysAreEqual(a: RecordedRead[], b: RecordedRead[]) {
     return arraysAreEqualsByPredicateFn(a, b, (a, b) => a.equals(b));
 }
+
+/**
+ * This Map does not return empty values, so there's always a default value created
+ */
+export abstract class DefaultMap<K, V> extends Map<K,V>{
+    abstract createDefaultValue(): V;
+
+    get(key: K): V {
+        let result = super.get(key);
+        if(result === undefined) {
+            result = this.createDefaultValue();
+            this.set(key, result);
+        }
+        return result;
+    }
+}
+
+/**
+ *
+ * @param createDefaultValueFn
+ * @returns a Map that creates and inserts a default value when that value does not exist. So the #get method always returns something.
+ */
+export function newDefaultMap<K,V>(createDefaultValueFn: () => V): DefaultMap<K, V> {
+    return new class extends DefaultMap<K, V> {
+        createDefaultValue(): V {
+            return createDefaultValueFn();
+        }
+    }()
+}
