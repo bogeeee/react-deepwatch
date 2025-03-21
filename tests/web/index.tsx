@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, load, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
+import {watchedComponent, useWatchedState, watched, load, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -303,11 +303,11 @@ const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
     const state = useWatchedState({form: {
             name: "",
             address: ""
-        }});
+        }}, {onChange: () => console.log("useWatchedState: Form was changed")});
 
     return <div>
         <h3>ShouldReactToChildComponentsFormChange</h3>
-        <ShouldReactToChildComponentsFormChange_Child form={state.form} /> <i>Typing Should print "form changed" in the console</i>
+        <ShouldReactToChildComponentsFormChange_Child form={watched(state.form, {onChange: () => console.log("Form was changed")})} /> <i>Typing Should print "form changed" in the console</i>
         <div>{JSON.stringify(state)}</div>
     </div>
 });
