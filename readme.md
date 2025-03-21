@@ -1,7 +1,4 @@
 # React Deepwatch - no more setState and less
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!  !!!!!!!!!!!!!!!!!!!!!!!  
-**!!!! Concept code. Not yet working. Greetings to Brillout and aleclarson !!!!**  
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 **Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write less code 😊.
@@ -84,7 +81,7 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 # [Deeper explaining the mechanics](mechanics.md)
 
 # Playground [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=react-deepwatch%20example&file=index.ts)
-_Not working on **Firefox** with Stackblitz currently. Ignore the ever-spinning "Installing dependencies"._
+TODO
 
 # Further notes
 
