@@ -1,4 +1,4 @@
-# Deeper explaining the mechanics
+# Deeper explanation of the mechanics
 ## Re-rendering
 - A watchedComponents is re-rendered **by React from the outside**, only when shallow properties change. It uses React's [memo](https://react.dev/reference/react/memo) therefore. See the `WatchedComponentOptions#memo` flag.
 - A watchedComponents re-renders it's self when a property, that is actually "read" inside the render function (=component function), later changes. This is from these (root) sources:

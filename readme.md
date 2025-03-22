@@ -28,7 +28,7 @@ const MyComponent = watchedComponent(props => {
 
 <MyComponent/> // Use MyComponent
 ````
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.tsx)
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.jsx)
 
 ## and less... loading code
 Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
@@ -45,6 +45,8 @@ const MyComponent = watchedComponent(props => {
 
 <MyComponent/> // Use MyComponent
 ````
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
+
 **`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.  
 👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._
@@ -79,11 +81,6 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 - [startTransition](https://react.dev/reference/react/startTransition) is not supported (has no effect).
 - As said: Keep in mind that `load(...)` calls `preserve` on its result. It also invalidates (destroys) the "unused" objects. _When they're not really unused any you are trying to access them, You'll get the proper error message how to disable it_.
 
-# [Deeper explaining the mechanics](mechanics.md)
-
-# Playground [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=react-deepwatch%20example&file=index.ts)
-TODO
-
 # And less... handing onChange listeners to child components
 Since we have proxy-facades, we can easily hook on, whenever some deep data changes and don't need to manage that with callback- passing to child-child components.
 Let's say, we have a form and a child component, that modifies it. We are interested in changes, so we can send the form content to the server.
@@ -106,6 +103,8 @@ const MyParentComponent = watchedComponent(props => {
     </form>
 });
 ````
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/onchange-handlers?title=react-deepwatch%20example&file=index.jsx)
+
 _This example will trigger both onChange handlers._
 
 _Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that came from the server_
@@ -118,6 +117,8 @@ You can also use `watched` similarly  to `useWatchedState` to watch any global o
 
 ### poll
 Besides `load`, there's also the `poll` function, which works similar, but re-loads in regular intervals. _See jsDoc_
+
+# [Deeper explanation of the mechanics](https://github.com/bogeeee/react-deepwatch/blob/main/react-deepwatch/mechanics.md)
 
 ### Simplify the server side as well
 If you like, how this library simplifies things for you and want to write the backend (http) endpoints behind your load(...) statements simply as typescript methods, have a look at my flagship project [Restfuncs](https://github.com/bogeeee/restfuncs).
