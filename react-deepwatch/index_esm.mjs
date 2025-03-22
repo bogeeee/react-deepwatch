@@ -13,4 +13,3 @@ export const debug_tagComponent = cjsIndex.debug_tagComponent
 
 import cjsPreserve from "./preserve.js"
 export const preserve = cjsPreserve.preserve
-export const PreserveOptions = cjsPreserve.PreserveOptions

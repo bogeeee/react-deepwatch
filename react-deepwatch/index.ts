@@ -1311,4 +1311,5 @@ export function debug_tagComponent(name: string) {
     currentRenderRun!.frame.persistent.debug_tag = name;
 }
 
-export {preserve, PreserveOptions} from "./preserve"
+export {preserve} from "./preserve"
+export type {PreserveOptions} from "./preserve"
