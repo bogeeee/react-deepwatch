@@ -83,6 +83,33 @@ To reduce the number of expensive `myFetchFromServer` calls, try the following:
 # Playground [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/example?title=react-deepwatch%20example&file=index.ts)
 TODO
 
+# And less... handing onChange listeners to child components
+Since we have proxy-facades, we can easily hook on, whenever some deep data changes and don't need to manage that with callback- passing to child-child components.
+Let's say, we have a form and a child component, that modifies it. We are interested in changes, so we can send the form content to the server.
+````jsx
+import {watchedComponent, watched, useWatchedState} from "react-deepwatch"
+const MyParentComponent = watchedComponent(props => {
+    const myState = useWatchedState({
+        form: {
+            name: "",
+            address: ""
+        }
+    }, {onChange: () => console.log("Something deep inside myState has changed")}); // Option 1: You can hook here
+
+    return <form>        
+        <ChildComponentThatModifiesForm form={ // let's pass a special version of myState.form to the child component which calls our onChange handler
+            watched(myState.form, {
+                onChange: () => {postFormToTheSerer(myState.form); console.log("Somthing under myState.form was changed")} // Option 2: You can also hook here
+            })
+        }/>
+    </form>
+});
+````
+_This example will trigger both onChange handlers._
+
+_Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that came from the server_
+
+
 # Further notes
 
 ### watched

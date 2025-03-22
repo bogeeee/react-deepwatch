@@ -310,7 +310,7 @@ const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
         <ShouldReactToChildComponentsFormChange_Child form={watched(state.form, {onChange: () => console.log("Form was changed")})} /> <i>Typing Should print "form changed" in the console</i>
 
     </div>
-}, {useGlobalSharedProxyFacade: true});
+}, {useGlobalSharedProxyFacade: true /* setting it to false should also work */});
 
 const ExampleErrorBoundary = (props) => {
     return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>

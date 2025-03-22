@@ -158,7 +158,7 @@ export function arraysAreShallowlyEqual(a: unknown[], b: unknown[]) {
         return false;
     }
     for(let i = 0;i<a.length;i++) {
-        if(a[i] !== b[i]) { // TODO add option for object instance equality
+        if(a[i] !== b[i]) {
             return false;
         }
     }
@@ -175,10 +175,10 @@ export function arraysWithEntriesAreShallowlyEqual(a: Array<[unknown, unknown]>,
         return false;
     }
     for(let i = 0;i<a.length;i++) {
-        if(a[i][0] !== b[i][0]) { // TODO add option for object instance equality
+        if(a[i][0] !== b[i][0]) {
             return false;
         }
-        if(a[i][1] !== b[i][1]) { // TODO add option for object instance equality
+        if(a[i][1] !== b[i][1]) {
             return false;
         }
     }

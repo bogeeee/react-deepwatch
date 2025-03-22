@@ -63,7 +63,10 @@ type WatchedComponentOptions = {
     /**
      * Shares a global proxy facade instance for all watchedComponents. This is the more tested and easier to think about option.
      * Disabling this creates a layer of new proxies for every of your child components. Object instances **inside** your component may still be consistent, but there could be: objInsideMyComponent !== myObjectHandedOverGloballyInSomeOtherWay. Real world use cases have to prove, if this is good way.
-     * Default: true
+     * Note:
+     * <p>
+     *  Default: true
+     * </p>
      */
     // Development: Note: Also keep in mind: `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals -> is this a problem? I assume that the component instances/state and therefore the watchedProxyFacades stay the same.
     useGlobalSharedProxyFacade?: boolean
@@ -753,6 +756,10 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 type WatchedOptions = {
     /**
      * Called, when a deep property was changed through the proxy.
+     * Setting this, will create a new proxy-facade for the purpuse of watching changes only (deep) under that proxy.
+     * <p>
+     *     <a href="https://github.com/bogeeee/react-deepwatch/blob/main/readme.md#and-less-handing-onchange-listeners-to-child-components">Usage</a>
+     * </p>
      */
     onChange?: () => void
 
@@ -765,9 +772,13 @@ type WatchedOptions = {
 }
 
 /**
- * TODO: document
- * @param obj
+ * Watches any (external) object and tracks reads to it's deep childs. Changes to these tracked reads will result in a re-render or re-load the load(...) statements that depend on it.
+ * <p>
+ * Also you can use it with the onChange option, see the <a href="https://github.com/bogeeee/react-deepwatch/blob/main/readme.md#and-less-handing-onchange-listeners-to-child-components">"And less... handing onChange listeners to child components"</a> use case.
+ * </p>
+ * @param obj original object to watch
  * @param options
+ * @returns a proxy for the original object.
  */
 export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
     currentRenderRun || throwError("watched is not used from inside a watchedComponent");
@@ -790,7 +801,7 @@ export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
 }
 
 /**
- * TODO: document
+ * Saves the state like with useState(...) and watches and tracks reads to it's deep childs. Changes to these tracked reads will result in a re-render or re-load the load(...) statements that depend on it.
  * @param initial
  * @param options
  */
