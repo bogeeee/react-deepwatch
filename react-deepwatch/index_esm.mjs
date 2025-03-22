@@ -3,4 +3,12 @@
 
 
 import cjsIndex from "./index.js"
-export const todo = cjsIndex.todo
+export const watchedComponent = cjsIndex.watchedComponent
+export const watched = cjsIndex.watched
+export const useWatchedState = cjsIndex.useWatchedState
+export const load = cjsIndex.load
+export const isLoading = cjsIndex.isLoading
+export const loadFailed = cjsIndex.loadFailed
+export const poll = cjsIndex.poll
+export const debug_tagComponent = cjsIndex.debug_tagComponent
+

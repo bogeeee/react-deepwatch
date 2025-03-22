@@ -1,6 +1,6 @@
 {
   "name": "react-deepwatch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "keywords": [
     "react",
@@ -44,8 +44,6 @@
     "react": "^18.3.1",
     "@types/react": "^18.3.11",
     "react-error-boundary": "^4.x",
-    "clone": "^2.1.2",
-    "@types/clone": "^2.1.4",
     "proxy-facades": "^1.0.5"
   },
   "devDependencies": {
@@ -54,6 +52,8 @@
     "rimraf": "=5.0.5",
     "ncp": "=2.0.0",
     "typescript": "^5.4.5",
-    "vitest": "^1.5.0"
+    "vitest": "^1.5.0",
+    "clone": "^2.1.2",
+    "@types/clone": "^2.1.4"
   }
 }
