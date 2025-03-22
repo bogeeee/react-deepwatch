@@ -1,6 +1,6 @@
 import React from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, watched, useWatchedState} from "react-deepwatch"
+import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve} from "react-deepwatch"
 
 
 const MyComponent = watchedComponent(props => {
@@ -14,4 +14,4 @@ const MyComponent = watchedComponent(props => {
 
 <MyComponent/> // Use MyComponent
 
-createRoot(document.getElementById('root')!).render(<MyComponent/>);
+createRoot(document.getElementById('root')).render(<MyComponent/>);

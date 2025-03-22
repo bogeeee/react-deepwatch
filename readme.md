@@ -28,6 +28,7 @@ const MyComponent = watchedComponent(props => {
 
 <MyComponent/> // Use MyComponent
 ````
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz_small.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.tsx)
 
 ## and less... loading code
 Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
