@@ -293,11 +293,11 @@ const LoadErrorsImmediately = watchedComponent(props => {
 
 });
 
-const ShouldReactToChildComponentsFormChange_Child = (props: {form: {name: string}}) => {
+const ShouldReactToChildComponentsFormChange_Child = watchedComponent((props: {form: {name: string}}) => {
     return <span>
         Name: <input type="text" value={props.form.name} onChange={(event) => props.form.name = event.target.value} />
     </span>
-};
+}, {useGlobalSharedProxyFacade: true});
 
 const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
     const state = useWatchedState({form: {
@@ -308,9 +308,9 @@ const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
     return <div>
         <h3>ShouldReactToChildComponentsFormChange</h3>
         <ShouldReactToChildComponentsFormChange_Child form={watched(state.form, {onChange: () => console.log("Form was changed")})} /> <i>Typing Should print "form changed" in the console</i>
-        <div>{JSON.stringify(state)}</div>
+
     </div>
-});
+}, {useGlobalSharedProxyFacade: true});
 
 const ExampleErrorBoundary = (props) => {
     return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>
