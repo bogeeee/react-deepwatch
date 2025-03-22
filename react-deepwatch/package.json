@@ -46,7 +46,7 @@
     "react-error-boundary": "^4.x",
     "clone": "^2.1.2",
     "@types/clone": "^2.1.4",
-    "proxy-facades": "^1.0.0"
+    "proxy-facades": "^1.0.5"
   },
   "devDependencies": {
     "tsx": "^4.7.0",
