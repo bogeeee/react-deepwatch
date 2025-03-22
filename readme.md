@@ -3,7 +3,7 @@
 
 **Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write less code 😊.
 - **Performance friendly**  
-  React Deepwatch uses [proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) facades to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
+  React Deepwatch uses [proxy-facades](https://github.com/bogeeee/proxy-facades) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
   If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#watched) ;)
 
