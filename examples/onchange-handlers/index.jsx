@@ -9,8 +9,8 @@ function postFormToTheSerer(form) {
 
 const MyChildComponentThatModifiesForm = watchedComponent((props) => {
     return <div>
-        Name: <input type="text" value={props.form.name} onChange={(event) => props.form.name = event.target.value} /><br/>
-        Adress: <input type="text" value={props.form.address} onChange={(event) => props.form.address = event.target.value} />
+        Name: <input type="text" {...bind(props.form.name)} /><br/>
+        Address: <input type="text" {...bind(props.form.address)} />
     </div>
 });
 
