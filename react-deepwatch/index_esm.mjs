@@ -10,6 +10,8 @@ export const isLoading = cjsIndex.isLoading
 export const loadFailed = cjsIndex.loadFailed
 export const poll = cjsIndex.poll
 export const debug_tagComponent = cjsIndex.debug_tagComponent
+export const binding = cjsIndex.binding
+export const bind = cjsIndex.bind
 
 import cjsPreserve from "./preserve.js"
 export const preserve = cjsPreserve.preserve
