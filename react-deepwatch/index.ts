@@ -794,7 +794,7 @@ export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
         !currentRenderRun!.diagnosis_objectsWatchedWithOnChange.has(result) || throwError("You have called watched(someObject, {onChange:...}) 2 times for the same someObj. This is not supported, since for keeping as much object instance consitency as possible, there is one fixed proxyfacade-for-change-tracking assiciated to it. If you really have a valid use case for watching the same object twice for changes, submit an issue.");
         currentRenderRun!.diagnosis_objectsWatchedWithOnChange.add(result)
 
-        const facadeForChangeWatching = currentRenderRun!.frame.persistent.watchedObject_to_childProxyFacade.get(obj);
+        const facadeForChangeWatching = currentRenderRun!.frame.persistent.watchedObject_to_childProxyFacade.get(obj); // Might create a new facade
 
         // Listen for changes and call options.onChange during component mount:
         const changeHandler = (changeOperation: any) => options.onChange!()
