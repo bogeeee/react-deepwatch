@@ -2,7 +2,7 @@ import {
     RecordedRead,
     RecordedReadOnProxiedObject,
     RecordedValueRead,
-    WatchedProxyFacade, installChangeTracker
+    WatchedProxyFacade, installChangeTracker, RecordedPropertyRead
 } from "proxy-facades";
 import {
     arraysAreEqualsByPredicateFn,
@@ -313,6 +313,12 @@ class LoadCall {
     }
 }
 
+function createWatchedProxyFacade() {
+    const result = new WatchedProxyFacade();
+    result.trackGetterCalls = true; // we need this for bindings
+    return result;
+}
+
 /**
  * Fields that persist across re-render and across frames
  */
@@ -323,10 +329,10 @@ class WatchedComponentPersistent {
 
     get watchedProxyFacade() {
         if(this.options.useGlobalSharedProxyFacade === false) {
-            return this._nonSharedWatchedProxyFacade || (this._nonSharedWatchedProxyFacade = new WatchedProxyFacade());
+            return this._nonSharedWatchedProxyFacade || (this._nonSharedWatchedProxyFacade = createWatchedProxyFacade());
         }
         // Use a global shared instance
-        return sharedWatchedProxyFacade || (sharedWatchedProxyFacade = new WatchedProxyFacade()); // Lazy initialize global variable
+        return sharedWatchedProxyFacade || (sharedWatchedProxyFacade = createWatchedProxyFacade()); // Lazy initialize global variable
     }
 
     /**
@@ -528,7 +534,7 @@ class Frame {
         if(this.persistent.options.watchOutside !== false) {
             try {
                 if (read instanceof RecordedReadOnProxiedObject) {
-                    installChangeTracker(read.obj);
+                    installChangeTracker(read.origObj);
                 }
             }
             catch (e) {
@@ -1304,6 +1310,107 @@ function probe<T>(probeFn: () => T, defaultResult: T) {
     })
 
     return defaultResult;
+}
+
+export type ValueOnObject<T> = {value: T}
+
+type BindingOptions = {
+    isAccessor?: boolean
+}
+
+/**
+ * Helper for {@see bind}. Looks up the last read and returns a binding for that.
+ * @param prop
+ * @param options
+ */
+export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> {
+    const renderRun = currentRenderRun;
+    // Validity check:
+    if (renderRun === undefined) throw new Error("bind(...) not used from inside a watchedComponent");
+
+    const diagnosis_msg = () => `Make sure, prop is derived from something watched: The component's 'props', or a useWatchedState(...) or a wached(...) or a load(...).`;
+
+    let obj:object;
+    let key: string | symbol;
+    // Obtain lastRead
+    renderRun.recordedReads.length > 0 || throwError("Illegal state: no recorded reads. ${diagnosis_msg()}");
+    const lastRead = renderRun.recordedReads[renderRun.recordedReads.length - 1];
+    const diagnosis_moreMsg = () => `The last 'read' in your component function was of type: ${lastRead.constructor.name}`
+    if(!(lastRead instanceof RecordedReadOnProxiedObject)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+    if(lastRead.proxyHandler.facade.currentOutermostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
+        obj = lastRead.proxyHandler.facade.currentOutermostGetter.proxy
+        key = lastRead.proxyHandler.facade.currentOutermostGetter.key
+        prop === obj[key] || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
+    }
+    else { // property access without getter:
+        if (!(lastRead instanceof RecordedPropertyRead)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+
+        obj = lastRead.proxy;
+        key = lastRead.key;
+
+        // Check if bind is deterministic:
+        //@ts-ignore
+        lastRead.value === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+        prop === lastRead.value || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+    }
+
+    return {
+        get value() {
+            //@ts-ignore
+            return obj[key] as T
+        },
+        set value(value) {
+            //@ts-ignore
+            obj[key] = value;
+        }
+    }
+}
+
+/**
+ * For usage, see <a href="https://github.com/bogeeee/react-deepwatch/blob/main/readme.md#and-less-onchange-code-for-ltinputgt-elements">the docs</a>
+ * @param prop the value from the object (not really just the value. react-deepwatch uses some tricks and looks at your last read to a proxied object, to determine the object and key of the binding)
+ * @param options
+ */
+export function bind<T>(prop: T, options?: BindingOptions) {
+    const bnd = binding(prop, options);
+    return {
+        value: bnd.value,
+        checked: bnd.value,
+        onChange: (event: T | {target: {value: T}}, ...args: any[]) => {
+            if(event !== null && typeof event === "object") {
+                if(!("target" in event)) {
+                    throw new Error("Event has no target property. The bind(...) function handles just input component with standard behaviour. If you have something more exotic and want it to work with bind, have a look at the (very short) source code of this bind function and implement onChange differently.")
+                }
+                if(event.target instanceof HTMLInputElement) { // native <input /> element ?
+                    const type = event.target.type;
+                    if(type === "checkbox") {
+                        bnd.value = event.target.checked as T;
+                    }
+                    else if(type === "radio") {
+                        throw new Error(`bind(...) is not supported for <input type="radio" />.`)
+                    }
+                    else { // most input elements accept a value
+                        bnd.value = event.target.value as T;
+                    }
+                }
+                else if(event.target instanceof HTMLSelectElement) {
+                    bnd.value = event.target.value;
+                }
+                else if("checked" in event.target) {
+                    bnd.value = event.target.checked as T; // assuming checkbix
+                }
+                else if("value" in event.target) {
+                    bnd.value = event.target.value as T;
+                }
+                else {
+                    throw new Error("This input type is not yet implemented with bind(...)")
+                }
+            }
+            else { // event is a primitive ?
+                bnd.value = event as T; // assume, that event is not an event but the immediate value
+            }
+        }
+    };
 }
 
 

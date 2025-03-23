@@ -1,8 +1,21 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, watched, load, debug_tagComponent, isLoading, loadFailed} from "react-deepwatch/develop";
+import {watchedComponent, useWatchedState, watched, load, debug_tagComponent, isLoading, loadFailed, bind} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
+
+//Blueprint.js:
+import "normalize.css";
+import "@blueprintjs/core/lib/css/blueprint.css";
+import {
+    Checkbox as Blueprint_Checkbox,
+    HTMLSelect as Blueprint_HTMLSelect,
+    InputGroup,
+    Slider as Blueprint_Slider
+} from "@blueprintjs/core";
+
+import { css } from '@emotion/react'
+import {Checkbox, MenuItem, Select, Switch, TextField} from "@mui/material";
 
 function renderCounter(msg: string) {
     const [state] = useState({counter: 0});
@@ -312,6 +325,63 @@ const ShouldReactToChildComponentsFormChange = watchedComponent(props => {
     </div>
 }, {useGlobalSharedProxyFacade: true /* setting it to false should also work */});
 
+const Bindings = watchedComponent(props => {
+    const state = useWatchedState({
+            text: "",
+            boolean: true,
+            number: 0,
+            number2: 4,
+            time: "08:15",
+            date: "2025-02-02",
+            select: "apple",
+            _rawValue: "rawPrefix_",
+            get presentedValue() {
+                return this._rawValue.replace("rawPrefix_", "");
+            },
+            set presentedValue(newValue) {
+                this._rawValue = `rawPrefix_${newValue}`
+            },
+
+            // Another accessor layer over presentedValue that adds a :)
+            get alwaysSmiling() {
+                return this.presentedValue+":)";
+            },
+            set alwaysSmiling(newValue) {
+                this.presentedValue = newValue.replace(":)",""); // translate to serious value!
+            }
+        });
+
+    return <div>
+        <h3>Bindings</h3>
+        text: <input type="text" {...bind(state.text)}/><br/>
+        boolean: <input type="checkbox" {...bind(state.boolean)}/><br/>
+        number: <input type="number" {...bind(state.number)}/><br/>
+        time: <input type="time" {...bind(state.time)}/><br/>
+        date: <input type="date" {...bind(state.date)}/><br/>
+        select: <select{...bind(state.select)}><option>Please choose</option><option value="apple">Apple</option><option value="cherry">Cherry</option></select><br/>
+        presentedValue (property accessor for _rawValue): <input type="text" {...bind(state.presentedValue)}/><br/>
+        alwaysSmiling: <input type="text" {...bind(state.alwaysSmiling)}/><br/>
+        text with Blueprint input: <InputGroup {...bind(state.text)} />
+        checkbox with Blueprint: <Blueprint_Checkbox label="label" {...bind(state.boolean)} />
+        select with Blueprint: <Blueprint_HTMLSelect {...bind(state.select)}><option>Please choose</option><option value="apple">Apple</option><option value="cherry">Cherry</option></Blueprint_HTMLSelect><br/>
+        Blueprint slider <Blueprint_Slider
+            min={0}
+            max={10}
+            stepSize={0.1}
+            labelStepSize={10}
+            {...bind(state.number2)}
+        />
+        <br/>
+        text with MUI input: <TextField {...bind(state.text)} /><br/>
+        checkbox with MUI: <Checkbox {...bind(state.boolean)} /><br/>
+        switch with MUI: <Switch {...bind(state.boolean)} /><br/>
+        select with MUI: <Select {...bind(state.select)}><MenuItem  value="">Please choose</MenuItem><MenuItem value="apple">Apple</MenuItem><MenuItem value="cherry">Cherry</MenuItem></Select><br/>
+        <br/>
+        {JSON.stringify(state)}
+    </div>
+});
+
+
 const ExampleErrorBoundary = (props) => {
     return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>
         {props.children}
@@ -356,6 +426,8 @@ function App(props) {
             <ShouldReLoadIfPropsChange/>
             <hr/>
             <ShouldReactToChildComponentsFormChange/>
+            <hr/>
+            <Bindings/>
             <hr/>
             <button onClick={() => switchPoperOff(true)}>Shut down all components!</button>
         </Suspense>

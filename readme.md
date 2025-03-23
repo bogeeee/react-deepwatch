@@ -109,6 +109,19 @@ _This example will trigger both onChange handlers._
 
 _Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that came from the server_
 
+# ...and less onChange code for &lt;input/&gt; elements
+
+Let's make the value binding code a bit easier:
+````jsx
+import {bind} from "react-deepwatch";
+
+// Old:
+<input type="text" value={myState.myValue} onChange={(event) => myState.myValue = event.how.was.that.again.i.just.want.the.value} />
+
+// New:
+<input type="text" {...bind(myState.myValue)} />
+````
+It works for all sorts of input types, not only text👍. Also with [MUI](https://mui.com/) and [Blueprint](https://blueprintjs.com) input components and should work in general with other library components as long as they stick to the standards.  
 
 # Further notes
 
@@ -118,7 +131,7 @@ You can also use `watched` similarly  to `useWatchedState` to watch any global o
 ### poll
 Besides `load`, there's also the `poll` function, which works similar, but re-loads in regular intervals. _See jsDoc_
 
-# [Deeper explanation of the mechanics](https://github.com/bogeeee/react-deepwatch/blob/main/react-deepwatch/mechanics.md)
+### [Deeper explanation of the mechanics](https://github.com/bogeeee/react-deepwatch/blob/main/react-deepwatch/mechanics.md)
 
 ### Simplify the server side as well
 If you like, how this library simplifies things for you and want to write the backend (http) endpoints behind your load(...) statements simply as typescript methods, have a look at my flagship project [Restfuncs](https://github.com/bogeeee/restfuncs).

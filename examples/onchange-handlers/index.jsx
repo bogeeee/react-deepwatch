@@ -1,6 +1,6 @@
 import React from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve} from "react-deepwatch"
+import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve, bind} from "react-deepwatch"
 
 
 function postFormToTheSerer(form) {
