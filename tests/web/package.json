@@ -4,7 +4,9 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "dev": "vite --force"
+    "dev": "vite --force",
+    "clean": "tsc --build --clean",
+    "build": "tsc --build --force"
   },
   "dependencies": {
     "@types/react": "^18.3.11",
