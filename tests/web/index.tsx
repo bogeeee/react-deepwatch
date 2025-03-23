@@ -349,7 +349,7 @@ const Bindings = watchedComponent(props => {
             set alwaysSmiling(newValue) {
                 this.presentedValue = newValue.replace(":)",""); // translate to serious value!
             }
-        });
+        }, /*{onChange: () => {console.log("state.something has changed")}}*/);
 
     return <div>
         <h3>Bindings</h3>

@@ -314,9 +314,16 @@ class LoadCall {
 }
 
 function createWatchedProxyFacade() {
-    const result = new WatchedProxyFacade();
-    result.trackGetterCalls = true; // we need this for bindings
-    return result;
+    const facade = new WatchedProxyFacade();
+    facade.trackGetterCalls = true; // we need this for bindings
+    // For bindings, we need to track reads for **all** facades:
+    facade.onAfterRead((read) => {
+        if(currentRenderRun) {
+            currentRenderRun.binding_lastSeenRead = read;
+            currentRenderRun.binding_lastSeenRead_outerMostGetter = facade.currentOutermostGetter;
+        }
+    })
+    return facade;
 }
 
 /**
@@ -569,6 +576,9 @@ class RenderRun {
 
     isPassive=false;
 
+    /**
+     * Recorded reads of this component's watchedProxyFacade
+     */
     recordedReads: RecordedRead[] = [];
 
     loadCallIdsSeen = new Set<LoadCall["id"]>();
@@ -595,6 +605,12 @@ class RenderRun {
      * (Additional) effect cleanup functions
      */
     effectCleanupFns: (() => void)[] = [];
+
+    /**
+     * Last seen read on **all** watchedProxyFacade levels. {@see binding} needs the real, highest level read.
+     */
+    binding_lastSeenRead?: RecordedRead
+    binding_lastSeenRead_outerMostGetter?: WatchedProxyFacade["currentOutermostGetter"]
 
     diagnosis_objectsWatchedWithOnChange = new Set<object>();
 
@@ -1333,13 +1349,14 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
     let obj:object;
     let key: string | symbol;
     // Obtain lastRead
-    renderRun.recordedReads.length > 0 || throwError("Illegal state: no recorded reads. ${diagnosis_msg()}");
-    const lastRead = renderRun.recordedReads[renderRun.recordedReads.length - 1];
+    const lastRead = renderRun.binding_lastSeenRead;
+    if(!lastRead) throw new Error("Illegal state: no recorded reads. ${diagnosis_msg()}");
     const diagnosis_moreMsg = () => `The last 'read' in your component function was of type: ${lastRead.constructor.name}`
     if(!(lastRead instanceof RecordedReadOnProxiedObject)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
-    if(lastRead.proxyHandler.facade.currentOutermostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
-        obj = lastRead.proxyHandler.facade.currentOutermostGetter.proxy
-        key = lastRead.proxyHandler.facade.currentOutermostGetter.key
+    if(renderRun.binding_lastSeenRead_outerMostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
+        obj = renderRun.binding_lastSeenRead_outerMostGetter.proxy
+        key = renderRun.binding_lastSeenRead_outerMostGetter.key
+        //@ts-ignore
         prop === obj[key] || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
     }
     else { // property access without getter:
