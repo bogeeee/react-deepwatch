@@ -2,14 +2,15 @@ import React from "react";
 import {createRoot} from "react-dom/client";
 import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve, bind} from "react-deepwatch"
 
-async function myFetchFromServer() {
-    return (await(await fetch("example.json")).json()).name
-}
 
 const MyComponent = watchedComponent(props => {
+    const state = useWatchedState( {
+        myDeep: {counter: 0, b: 2}
+    }, {/* WatchedOptions (optional) */} );
 
     return <div>
-        Here's something fetched from the Server: {  load( async () => await myFetchFromServer(), {/* LoadOptions (optional) */} )  }
+        Counter is: {state.myDeep.counter}<br/>
+        <button onClick={ () => state.myDeep.counter++ /* will trigger a rerender */ }>Increase counter</button>
     </div>
 }, {/* WatchedComponentOptions (optional) */});
 

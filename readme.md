@@ -121,6 +121,7 @@ import {bind} from "react-deepwatch";
 // New:
 <input type="text" {...bind(myState.myValue)} />
 ````
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/bind?title=react-deepwatch%20example&file=index.jsx)
 It works for all sorts of input types, not only text👍. Also with [MUI](https://mui.com/) and [Blueprint](https://blueprintjs.com) input components and should work in general with other library components as long as they stick to the standards.  
 
 # Further notes

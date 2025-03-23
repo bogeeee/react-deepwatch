@@ -12,6 +12,4 @@ const MyComponent = watchedComponent(props => {
     </div>
 }, {/* WatchedComponentOptions (optional) */});
 
-<MyComponent/> // Use MyComponent
-
 createRoot(document.getElementById('root')).render(<MyComponent/>);
