@@ -827,7 +827,7 @@ export function watched<T extends object>(obj: T, options?: WatchedOptions): T {
  * @param initial
  * @param options
  */
-export function useWatchedState(initial: object, options?: WatchedOptions) {
+export function useWatchedState<S extends object>(initial: S, options?: WatchedOptions): S {
     currentRenderRun || throwError("useWatchedState is not used from inside a watchedComponent");
 
     const [state]  = useState(initial);
@@ -1391,9 +1391,9 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
 export function bind<T>(prop: T, options?: BindingOptions) {
     const bnd = binding(prop, options);
     return {
-        value: bnd.value,
-        checked: bnd.value,
-        onChange: (event: T | {target: {value: T}}, ...args: any[]) => {
+        value: bnd.value as any, // as any because too much compatibility issues
+        checked: bnd.value as boolean,
+        onChange: ((event: T | {target: {value: T}}) => {
             if(event !== null && typeof event === "object") {
                 if(!("target" in event)) {
                     throw new Error("Event has no target property. The bind(...) function handles just input component with standard behaviour. If you have something more exotic and want it to work with bind, have a look at the (very short) source code of this bind function and implement onChange differently.")
@@ -1426,7 +1426,7 @@ export function bind<T>(prop: T, options?: BindingOptions) {
             else { // event is a primitive ?
                 bnd.value = event as T; // assume, that event is not an event but the immediate value
             }
-        }
+        }) as ((event:any) => void) // too much compatibility issues
     };
 }
 
