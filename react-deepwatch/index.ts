@@ -701,6 +701,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
         // Register dismissErrorBoundary function:
         if(typeof useErrorBoundary === "function") { // Optional package was loaded?
+            //@ts-ignore
             if(useContext(ErrorBoundaryContext)) { // Inside an error boundary?
                 frame.dismissErrorBoundary = useErrorBoundary().resetBoundary;
             }
