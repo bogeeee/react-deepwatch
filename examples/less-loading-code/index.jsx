@@ -6,7 +6,7 @@ import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadF
 function simulateFetchFruitsFromServer(filter) {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
-            resolve(["Apple", "Banana", "Cherry", "Date", "Fig", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Peach", "Pear", "Pineapple", "Pomegranate", "Raspberry", "Strawberry", "Tangerine", "Watermelon"].filter(f => !filter || f.indexOf(filter) >= 0))
+            resolve(["Apple", "Banana", "Cherry", "Date", "Fig", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Peach", "Pear", "Pineapple", "Pomegranate", "Raspberry", "Strawberry", "Tangerine", "Watermelon"].filter(f => !filter || f.toLowerCase().indexOf(filter.toLowerCase()) >= 0).join(", "))
         }, 1000)
     })
 }
@@ -20,7 +20,8 @@ const MyComponent = watchedComponent(props => {
 
     return <div>
         Filter      <input type="text"     {...bind(state.filter    )} />
-        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(() => simulateFetchFruitsFromServer(state.filter),{fallback:["loadinng list 🌀"]}).join(", ") }</i></div><br/>
+        <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loadinng list 🌀"} )}</i></div><br/>
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
         {state.showPrices?<div>Free today!</div>:null}
     </div>
