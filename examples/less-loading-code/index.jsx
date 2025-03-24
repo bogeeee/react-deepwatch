@@ -11,7 +11,7 @@ function simulateFetchFruitsFromServer(filter) {
     })
 }
 
-// Will reload the fruits and show a 🌀, if you type in the filter box. Will not reload when you change the show prices checkbox, because react-deepwatch sees, that it does not depend on it;)
+// Will reload the fruits and show a 🌀, if you type in the filter box. Will not reload them, when you change the show prices checkbox, because react-deepwatch sees, that load(...) does not depend on it;)
 const MyComponent = watchedComponent(props => {
     const state = useWatchedState({
         filter: "",
