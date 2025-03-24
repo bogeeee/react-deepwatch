@@ -20,7 +20,7 @@ const MyComponent = watchedComponent(props => {
 
     return <div>
         Filter      <input type="text"     {...bind(state.filter    )} />
-        <div>Here are the fruits, fetched from the Server: {  load(() => simulateFetchFruitsFromServer(state.filter),{fallback:["loadinng list 🌀"]}).join(", ") }</div>
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(() => simulateFetchFruitsFromServer(state.filter),{fallback:["loadinng list 🌀"]}).join(", ") }</i></div><br/>
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
         {state.showPrices?<div>Free today!</div>:null}
     </div>
