@@ -11,7 +11,7 @@ function simulateFetchFruitsFromServer(filter) {
     })
 }
 
-// Will reload the fruits and show a 🌀, if you type in the filter box. Will not reload them, when you change the show prices checkbox, because react-deepwatch sees, that load(...) does not depend on it;)
+// Will reload the fruits and show a 🌀 during load, if you type in the filter box.
 const MyComponent = watchedComponent(props => {
     const state = useWatchedState({
         filter: "",
@@ -19,10 +19,18 @@ const MyComponent = watchedComponent(props => {
     })
 
     return <div>
+        {/* A nice bind syntax. No more 'onChange(...)' code */}
         Filter      <input type="text"     {...bind(state.filter    )} />
+
+        {/* state.filter="" will automatically rerender / re-run the load(...), if necessary👍 */}
         <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
-        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loadinng list 🌀"} )}</i></div><br/>
+
+        {/* you can fetch data from **inside** conditional render code or loops😍! No useEffect needed! Knows its dependencies automatically👍 */}
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
+
+        {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍 */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
+
         {state.showPrices?<div>Free today!</div>:null}
     </div>
 });

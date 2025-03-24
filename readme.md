@@ -6,6 +6,35 @@
   React Deepwatch uses a [proxy-facade](https://github.com/bogeeee/proxy-facades) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
   If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#watched) ;)
+# Quick example to show you most features:
+````jsx
+// Will reload the fruits and show a 🌀 during load, if you type in the filter box.
+const MyComponent = watchedComponent(props => {
+    const state = useWatchedState({
+        filter: "",
+        showPrices: false,
+    })
+
+    return <div>
+        {/* A nice bind syntax. No more 'onChange(...)' code */}
+        Filter      <input type="text"     {...bind(state.filter    )} />
+        
+        {/* state.filter="" will automatically rerender and re-run the following server fetch, if necessary👍 */}
+        <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
+        
+        {/* you can fetch data from **inside** conditional render code or loops😎! No useEffect needed! Knows its dependencies automatically👍 */}        
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
+
+        {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
+        Show prices <input type="checkbox" {...bind(state.showPrices)} />
+        {/* showing here, that it will **only** do a rerender: */}
+        {state.showPrices?<div>Free today!</div>:null}
+    </div>
+});
+
+createRoot(document.getElementById('root')).render(<MyComponent/>);
+````
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
 
 # Install
 ````bash
