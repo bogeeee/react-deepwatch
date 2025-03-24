@@ -1,4 +1,3 @@
-import {v} from "vitest/dist/reporters-yx5ZTtEV";
 import {visitReplace} from "./Util";
 import _ from "underscore";
 import {invalidateObject, deleteProperty} from "proxy-facades";
@@ -187,6 +186,7 @@ export function _preserve<T>(oldValue: T, newValue: T, options: PreserveOptions,
                 invalidateObject(obj, "This object is obsolete. Another object is used in its place (which has all values copied to it =preserved), to keep constant object identities across data fetches. See cause. You can disable invalidation via the PreserveOptions#destroyObsolete flag.", obsoleteCause)
             }
             catch (e) {
+                //@ts-ignore TS2554 Expected 0-1 arguments, but got 2  - produces compile error when downstream projects include this lib and compile for <=ES2020.
                 throw new Error("Error during invalidation. You should disable invalidation via the PreserveOptions#destroyObsolete flag", {cause: e});
             }
         });

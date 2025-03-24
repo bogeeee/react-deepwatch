@@ -129,6 +129,7 @@ class LoadRun {
             let result = await this.loaderFn!(lastResult);
             if(this.options.preserve !== false) { // Preserve enabled?
                 if(isObject(result)) { // Result is mergeable ?
+                    //@ts-ignore TS2554 Expected 0-1 arguments, but got 2  - produces compile error when downstream projects include this lib and compile for <=ES2020.
                     this.loadCall.isUniquelyIdentified() || throwError(new Error(`Please specify a key via load(..., { key:<your key> }), so the result's object identity can be preserved. See LoadOptions#key and LoadOptions#preserve. Look at the cause to see where load(...) was called`, {cause: this.loadCall.diagnosis_callstack}));
                     const preserveOptions = (typeof this.options.preserve === "object")?this.options.preserve: {};
                     result = _preserve(lastResult,result, preserveOptions, {callStack: this.loadCall.diagnosis_callstack});
@@ -549,6 +550,7 @@ class Frame {
 
                 }
                 else {
+                    //@ts-ignore TS2554 Expected 0-1 arguments, but got 2  - produces compile error when downstream projects include this lib and compile for <=ES2020.
                     throw new Error(`Could not enhance the original object to track reads. This can fail, if it was created with some unsupported language constructs (defining read only properties; subclassing Array, Set or Map; ...). You can switch it off via the WatchedComponentOptions#watchOutside flag. I.e: const MyComponent = watchedComponent(props => {...}, {watchOutside: false})`, {cause: e});
                 }
             }
@@ -1009,6 +1011,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     let lastLoadRun = renderRun.loadCallIndex < persistent.loadRuns.length?persistent.loadRuns[renderRun.loadCallIndex]:undefined;
     if(lastLoadRun) {
         lastLoadRun.loaderFn = options.interval ? loaderFn : undefined; // Update. only needed, when polling.
+        //@ts-ignore TS2554 Expected 0-1 arguments, but got 2  - produces compile error when downstream projects include this lib and compile for <=ES2020.
         lastLoadRun.loadCall.id === loadCall.id || throwError(new Error("Illegal state: lastLoadRun associated with different LoadCall. Please make sure that you don't use non-`watched(...)` inputs (useState, useContext) in your watchedComponent. " + `. Debug info: Ids: ${lastLoadRun.loadCall.id} vs. ${loadCall.id}. See cause for falsely associcated loadCall.`, {cause: lastLoadRun.loadCall.diagnosis_callstack})); // Validity check
     }
 
