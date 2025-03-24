@@ -22,15 +22,15 @@ const MyComponent = watchedComponent(props => {
         {/* A nice bind syntax. No more 'onChange(...)' code */}
         Filter      <input type="text"     {...bind(state.filter    )} />
 
-        {/* state.filter="" will automatically rerender / re-run the load(...), if necessary👍 */}
+        {/* state.filter="" will automatically rerender and re-run the following server fetch, if necessary👍 */}
         <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
 
-        {/* you can fetch data from **inside** conditional render code or loops😍! No useEffect needed! Knows its dependencies automatically👍 */}
+        {/* you can fetch data from **inside** conditional render code or loops😎! No useEffect needed! Knows its dependencies automatically👍 */}
         <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
 
-        {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍 */}
+        {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
-
+        {/* showing here, that clicking "show prices" will **only** do a rerender: */}
         {state.showPrices?<div>Free today!</div>:null}
     </div>
 });

@@ -27,7 +27,7 @@ const MyComponent = watchedComponent(props => {
 
         {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
-        {/* showing here, that it will **only** do a rerender: */}
+        {/* showing here, that clicking "show prices" will **only** do a rerender: */}
         {state.showPrices?<div>Free today!</div>:null}
     </div>
 });
