@@ -6,7 +6,8 @@
   React Deepwatch uses a [proxy-facade](https://github.com/bogeeee/proxy-facades) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
   If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#watched) ;)
-# Quick example to show you most features:
+
+# Quick example to show you most features
 ````jsx
 // Will reload the fruits and show a 🌀 during load, if you type in the filter box.
 const MyComponent = watchedComponent(props => {
