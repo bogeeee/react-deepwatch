@@ -2,7 +2,7 @@ import {it, expect, test, beforeEach,describe, vitest, vi} from 'vitest'
 import _ from "underscore"
 import {normalizeList, normalizeLists, preserve} from "./preserve";
 import clone from "clone";
-import {installChangeTracker} from "proxy-facades";
+import {installChangeTracker, WatchedProxyFacade} from "proxy-facades";
 
 beforeEach(() => {
 
@@ -34,14 +34,16 @@ describe('Preserve', () => {
             return o
         }
     },
-    /*
-    // Feature not used currently
+/*
+        // Feature not used currently
         {
-        name: "ProxiedGraph", proxyOrEnhance<T extends object>(o: T) {
-            return new WatchedProxyFacade().getProxyFor(o)
-        }
+            name: "ProxiedGraph",
+            _facade: new WatchedProxyFacade(),
+            proxyOrEnhance<T extends object>(o: T) {
+                return this._facade.getProxyFor(o)
+            }
     },
-    */
+*/
     {
         name: "Direct enhancement", proxyOrEnhance<T extends object>(o: T) {
             installChangeTracker(o);
