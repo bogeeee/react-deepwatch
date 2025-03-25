@@ -76,7 +76,7 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
 
-**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
+**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function _(which can as well be the result of a previous `load(...)` call)_  plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.  
 👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._
 For this mechanic to work, **make sure, all sources are watched**: `props` and `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
@@ -163,6 +163,17 @@ You can also use `watched` similarly  to `useWatchedState` to watch any global o
 Besides `load`, there's also the `poll` function, which works similar, but re-loads in regular intervals. _See jsDoc_
 
 ### [Deeper explanation of the mechanics](https://github.com/bogeeee/react-deepwatch/blob/main/react-deepwatch/mechanics.md)
+
+### Similar libraries
+There are also other libraries that address proxying the state:  
+[valito](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [wana](https://www.npmjs.com/package/wana),
+
+while React-deepwatch set's its self apart in these areas:
+- Deep (not only shallow-) proxying
+- Tracking changes above **and** below the proxy = also on the unproxied object.
+- Fully transparent support for `this`, getters/setters (treated white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
+- Very comprehensive `load(...)` concept with auto dependencies, fallbacks, probing functions, instance preserving mechanism, possible in conditionals/loops, polling, error boundaries.  
+- &lt;Input/&gt;  bind(...)ing
 
 ### Simplify the server side as well
 If you like, how this library simplifies things for you and want to write the backend (http) endpoints behind your load(...) statements simply as typescript methods, have a look at my flagship project [Restfuncs](https://github.com/bogeeee/restfuncs).
