@@ -381,6 +381,18 @@ const Bindings = watchedComponent(props => {
     </div>
 });
 
+let bindingsShouldNotContributeToDependencies_fetchCounter=0;
+const BindingsShouldNotContributeToDependencies = watchedComponent(props => {
+    const state = useWatchedState({
+        checked: false,
+    });
+
+    return <div><h3>BindingsShouldNotContributeToDependencies</h3>
+        <input type="checkbox" {...bind(state.checked)}/><i>Changing this should not fire a load</i><br/>
+        {load(() => `Fetched ${++bindingsShouldNotContributeToDependencies_fetchCounter} times`, {fallback: "loading"})}
+    </div>
+});
+
 
 const ExampleErrorBoundary = (props) => {
     return <ErrorBoundary fallbackRender={({ error, resetErrorBoundary }) => <div>Error: {error.message}</div> }>
@@ -428,6 +440,8 @@ function App(props) {
             <ShouldReactToChildComponentsFormChange/>
             <hr/>
             <Bindings/>
+            <hr/>
+            <BindingsShouldNotContributeToDependencies/>
             <hr/>
             <button onClick={() => switchPoperOff(true)}>Shut down all components!</button>
         </Suspense>

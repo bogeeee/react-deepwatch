@@ -217,3 +217,10 @@ export function newDefaultMap<K,V>(createDefaultValueFn: () => V): DefaultMap<K,
         }
     }()
 }
+
+export function array_peekLast<T>(array: Array<T>): T | undefined {
+    if(array.length === 0) {
+        return undefined
+    }
+    return array[array.length-1];
+}

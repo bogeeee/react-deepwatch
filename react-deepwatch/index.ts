@@ -5,6 +5,7 @@ import {
     WatchedProxyFacade, installChangeTracker, RecordedPropertyRead
 } from "proxy-facades";
 import {
+    array_peekLast,
     arraysAreEqualsByPredicateFn,
     isObject,
     newDefaultMap,
@@ -579,9 +580,14 @@ class RenderRun {
     isPassive=false;
 
     /**
-     * Recorded reads of this component's watchedProxyFacade
+     * Recorded reads of this component's watchedProxyFacade for load(...) statements
      */
-    recordedReads: RecordedRead[] = [];
+    load_recordedReads: RecordedRead[] = [];
+
+    /**
+     * Mutes recording into {@see RenderRun#load_recordedReads}
+     */
+    load_muteReadRecording = false;
 
     loadCallIdsSeen = new Set<LoadCall["id"]>();
 
@@ -664,6 +670,23 @@ class RenderRun {
             this.frame.stopListeningForChanges(); // Clean up now
         }
     }
+
+    /**
+     * Mutes read-/dependency recording for load(...) statements while running fn()
+     * @param fn
+     */
+    withReadRecordingMuted<T>(fn: () => T) {
+        try {
+
+            !this.load_muteReadRecording || throwError("Illegal state") // safety check: Should not be muted yet
+            this.load_muteReadRecording = true;
+            return fn();
+        }
+        finally {
+            this.load_muteReadRecording || throwError("Illegal state"); // safety check: Should currently be muted
+            this.load_muteReadRecording = false;
+        }
+    }
 }
 let currentRenderRun: RenderRun| undefined;
 
@@ -719,8 +742,9 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(!renderRun.isPassive) { // Active run ?
                     frame.watchPropertyChange(read);
                 }
-
-                renderRun.recordedReads.push(read);
+                if(!renderRun.load_muteReadRecording) {
+                    renderRun.load_recordedReads.push(read);
+                }
             };
             persistent.watchedProxyFacade.onAfterRead(readListener)
 
@@ -766,7 +790,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
         }
         finally {
-            renderRun.recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
+            renderRun.load_recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
             currentRenderRun = undefined;
         }
     }
@@ -975,7 +999,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     const renderRun = currentRenderRun;
     const frame = renderRun.frame
     const persistent = frame.persistent;
-    const recordedReadsSincePreviousLoadCall = renderRun.recordedReads; renderRun.recordedReads = []; // Pop recordedReads
+    const recordedReadsSincePreviousLoadCall = renderRun.load_recordedReads; renderRun.load_recordedReads = []; // Pop recordedReads
     const callerSourceLocation = callStack.stack ? getCallerSourceLocation(callStack.stack) : undefined;
 
     // Determine loadCallId:
@@ -1057,7 +1081,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         if(options.critical === false) {
             return result; // non-watched and add no dependency
         }
-        renderRun.recordedReads.push(new RecordedValueRead(result)); // Add as dependency for the next loads
+        renderRun.load_recordedReads.push(new RecordedValueRead(result)); // Add as dependency for the next loads
         return watched(result);
     }
     finally {
@@ -1133,7 +1157,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             loadRun.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loadRun.exec()); // Exec loaderFn
             loadRun.loaderFn = options.interval?loadRun.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
-            loadRun.recordedReadsInsideLoaderFn = renderRun.recordedReads; renderRun.recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
+            loadRun.recordedReadsInsideLoaderFn = renderRun.load_recordedReads; renderRun.load_recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
                 loadRun.result = {state: "resolved", resolvedValue: value};
@@ -1352,33 +1376,44 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
 
     let obj:object;
     let key: string | symbol;
-    // Obtain lastRead
+
+    // Obtain lastRead:
     const lastRead = renderRun.binding_lastSeenRead;
     if(!lastRead) throw new Error("Illegal state: no recorded reads. ${diagnosis_msg()}");
     const diagnosis_moreMsg = () => `The last 'read' in your component function was of type: ${lastRead.constructor.name}`
     if(!(lastRead instanceof RecordedReadOnProxiedObject)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
-    if(renderRun.binding_lastSeenRead_outerMostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
-        obj = renderRun.binding_lastSeenRead_outerMostGetter.proxy
-        key = renderRun.binding_lastSeenRead_outerMostGetter.key
-        //@ts-ignore
-        prop === obj[key] || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
-    }
-    else { // property access without getter:
-        if (!(lastRead instanceof RecordedPropertyRead)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
 
-        obj = lastRead.proxy;
-        key = lastRead.key;
-
-        // Check if bind is deterministic:
-        //@ts-ignore
-        lastRead.value === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
-        prop === lastRead.value || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+    if(array_peekLast(renderRun.load_recordedReads) === lastRead) { // Read was last recorded in the render run? Usually true, except when the binding is on a different facade layer (which is fine also)
+        renderRun.load_recordedReads.pop(); // Don't treat the read as a dependency to load(...) statements, because the value is exclusively consumed by the input component
     }
+
+    renderRun.withReadRecordingMuted(() => {
+        if (renderRun.binding_lastSeenRead_outerMostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
+            obj = renderRun.binding_lastSeenRead_outerMostGetter.proxy
+            key = renderRun.binding_lastSeenRead_outerMostGetter.key
+            //@ts-ignore
+            prop === obj[key] || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
+        } else { // property access without getter:
+            if (!(lastRead instanceof RecordedPropertyRead)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+
+            obj = lastRead.proxy;
+            key = lastRead.key;
+
+            // Check if bind is deterministic:
+            //@ts-ignore
+            lastRead.value === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+            prop === lastRead.value || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+        }
+    });
 
     return {
         get value() {
-            //@ts-ignore
-            return obj[key] as T
+            if(!currentRenderRun)  throw new Error("Illegal state. Not called from the render run of a watchedComponent");
+
+            return currentRenderRun.withReadRecordingMuted(() => { // get the value while not recording it as a read for the load(...) statements. Because this value is exclusively consumed by the input component and does never contribute as a dependency to load statements
+                //@ts-ignore
+                return obj[key] as T
+            })
         },
         set value(value) {
             //@ts-ignore
