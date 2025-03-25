@@ -13,11 +13,11 @@
     "directory": "react-deepwatch"
   },
   "license": "MIT",
-  "main": "index.js",
+  "main": "./dist/default/index.js",
   "exports": {
     ".": {
-      "browser": "./dist/mjs/index.js",
-      "default": "./index.js"
+      "browser": "./dist/browser/index.js",
+      "default": "./dist/default/index.js"
     },
     "./develop": {
       "browser": "./index.ts"
@@ -27,7 +27,8 @@
     "dev:playground.ts": "tsx devPlayground.ts",
     "dev:generateEsRuntimeBehaviourCheckerCode": "tsx dev_generateEsRuntimeBehaviourCheckerCode.ts",
     "clean": "tsc --build --clean && rimraf dist LICENSE readme.md",
-    "build": "tsc --build --force && tsc -module ES6 --outDir dist/mjs",
+    "build": "tsc --build --force && tsc -module ES6 --outDir dist/browser && npm run verify_d.ts",
+    "verify_d.ts": "tsc dist/**/*.d.ts -noEmit",
     "test": "npm run clean && vitest --clearScreen --hideSkippedTests --poolOptions.threads.singleThread",
     "test_specific": "npm run clean && vitest --clearScreen --hideSkippedTests --poolOptions.threads.singleThread --testNamePattern \"Arrays with Object.keys with .*push.* With writes from outside\"",
     "test:web:prepare": "npm install --prefix ../tests/web dev --ignore-scripts",
