@@ -172,7 +172,7 @@ while React-deepwatch set's its self apart in these areas:
 - Deep (not only shallow-) proxying
 - Tracking changes above **and** below the proxy = also on the unproxied object.
 - Fully transparent support for `this`, getters/setters (treated white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
-- Very comprehensive `load(...)` concept with auto dependencies, fallbacks, probing functions, instance preserving mechanism, possible in conditionals/loops, polling, error boundaries.  
+- Very comprehensive `load(...)` concept with auto dependencies, fallbacks, probing functions, instance preserving mechanism, possible in conditionals/loops, supports polling, error boundaries.  
 - &lt;Input/&gt;  bind(...)ing
 
 ### Simplify the server side as well
