@@ -585,9 +585,9 @@ class RenderRun {
     load_recordedReads: RecordedRead[] = [];
 
     /**
-     * Mutes recording into {@see RenderRun#load_recordedReads}
+     * Record the reads into which array? Undefined = recording muted
      */
-    load_muteReadRecording = false;
+    readsReacordingTarget?: RecordedRead[];
 
     loadCallIdsSeen = new Set<LoadCall["id"]>();
 
@@ -621,6 +621,10 @@ class RenderRun {
     binding_lastSeenRead_outerMostGetter?: WatchedProxyFacade["currentOutermostGetter"]
 
     diagnosis_objectsWatchedWithOnChange = new Set<object>();
+
+    constructor() {
+        this.readsReacordingTarget = this.load_recordedReads;
+    }
 
     handleRenderFinishedSuccessfully() {
         if(!this.isPassive) {
@@ -675,16 +679,14 @@ class RenderRun {
      * Mutes read-/dependency recording for load(...) statements while running fn()
      * @param fn
      */
-    withReadRecordingMuted<T>(fn: () => T) {
+    withRecordReadsInto<T>(fn: () => T, recordTarget: RecordedRead[] | undefined) {
+        const origTarget = this.readsReacordingTarget;
         try {
-
-            !this.load_muteReadRecording || throwError("Illegal state") // safety check: Should not be muted yet
-            this.load_muteReadRecording = true;
+            this.readsReacordingTarget = recordTarget;
             return fn();
         }
         finally {
-            this.load_muteReadRecording || throwError("Illegal state"); // safety check: Should currently be muted
-            this.load_muteReadRecording = false;
+            this.readsReacordingTarget = origTarget;
         }
     }
 }
@@ -742,9 +744,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(!renderRun.isPassive) { // Active run ?
                     frame.watchPropertyChange(read);
                 }
-                if(!renderRun.load_muteReadRecording) {
-                    renderRun.load_recordedReads.push(read);
-                }
+                renderRun.readsReacordingTarget?.push(read);
             };
             persistent.watchedProxyFacade.onAfterRead(readListener)
 
@@ -790,7 +790,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
         }
         finally {
-            renderRun.load_recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
+            renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
             currentRenderRun = undefined;
         }
     }
@@ -999,7 +999,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     const renderRun = currentRenderRun;
     const frame = renderRun.frame
     const persistent = frame.persistent;
-    const recordedReadsSincePreviousLoadCall = renderRun.load_recordedReads; renderRun.load_recordedReads = []; // Pop recordedReads
+    const recordedReadsSincePreviousLoadCall = renderRun.load_recordedReads; renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // Pop recordedReads
     const callerSourceLocation = callStack.stack ? getCallerSourceLocation(callStack.stack) : undefined;
 
     // Determine loadCallId:
@@ -1157,7 +1157,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             loadRun.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
             const resultPromise = Promise.resolve(loadRun.exec()); // Exec loaderFn
             loadRun.loaderFn = options.interval?loadRun.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
-            loadRun.recordedReadsInsideLoaderFn = renderRun.load_recordedReads; renderRun.load_recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
+            loadRun.recordedReadsInsideLoaderFn = renderRun.load_recordedReads; renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
                 loadRun.result = {state: "resolved", resolvedValue: value};
@@ -1387,7 +1387,7 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
         renderRun.load_recordedReads.pop(); // Don't treat the read as a dependency to load(...) statements, because the value is exclusively consumed by the input component
     }
 
-    renderRun.withReadRecordingMuted(() => {
+    renderRun.withRecordReadsInto(() => { // With muted read recording
         if (renderRun.binding_lastSeenRead_outerMostGetter && !(options?.isAccessor === false)) { // getter call and user want's getters ?
             obj = renderRun.binding_lastSeenRead_outerMostGetter.proxy
             key = renderRun.binding_lastSeenRead_outerMostGetter.key
@@ -1404,16 +1404,16 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
             lastRead.value === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
             prop === lastRead.value || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
         }
-    });
+    }, undefined);
 
     return {
         get value() {
             if(!currentRenderRun)  throw new Error("Illegal state. Not called from the render run of a watchedComponent");
 
-            return currentRenderRun.withReadRecordingMuted(() => { // get the value while not recording it as a read for the load(...) statements. Because this value is exclusively consumed by the input component and does never contribute as a dependency to load statements
+            return currentRenderRun.withRecordReadsInto(() => { // With muted read reacording. Get the value while not recording it as a read for the load(...) statements. Because this value is exclusively consumed by the input component and does never contribute as a dependency to load statements
                 //@ts-ignore
                 return obj[key] as T
-            })
+            }, undefined)
         },
         set value(value) {
             //@ts-ignore
