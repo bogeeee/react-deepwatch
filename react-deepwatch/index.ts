@@ -6,7 +6,7 @@ import {
 } from "proxy-facades";
 import {
     array_peekLast,
-    arraysAreEqualsByPredicateFn,
+    arraysAreEqualsByPredicateFn, arraysAreShallowlyEqual,
     isObject,
     newDefaultMap,
     PromiseState,
@@ -88,12 +88,9 @@ class LoadRun {
      */
     loaderFn?: (oldResult?: unknown) => Promise<unknown>;
 
+    deps!: {auto_recordedReads: RecordedRead[]} | {explicit: unknown[]};
 
-    /**
-     * From the beginning or previous load call up to this one
-     */
-    recordedReadsBefore!: RecordedRead[];
-    recordedReadsInsideLoaderFn!: RecordedRead[];
+    recordedReadsInsideLoaderFn?: RecordedRead[];
 
     result!: PromiseState<unknown>;
 
@@ -587,7 +584,7 @@ class RenderRun {
     /**
      * Record the reads into which array? Undefined = recording muted
      */
-    readsReacordingTarget?: RecordedRead[];
+    readsRecordingTarget?: RecordedRead[];
 
     loadCallIdsSeen = new Set<LoadCall["id"]>();
 
@@ -623,7 +620,7 @@ class RenderRun {
     diagnosis_objectsWatchedWithOnChange = new Set<object>();
 
     constructor() {
-        this.readsReacordingTarget = this.load_recordedReads;
+        this.readsRecordingTarget = this.load_recordedReads;
     }
 
     handleRenderFinishedSuccessfully() {
@@ -680,13 +677,13 @@ class RenderRun {
      * @param fn
      */
     withRecordReadsInto<T>(fn: () => T, recordTarget: RecordedRead[] | undefined) {
-        const origTarget = this.readsReacordingTarget;
+        const origTarget = this.readsRecordingTarget;
         try {
-            this.readsReacordingTarget = recordTarget;
+            this.readsRecordingTarget = recordTarget;
             return fn();
         }
         finally {
-            this.readsReacordingTarget = origTarget;
+            this.readsRecordingTarget = origTarget;
         }
     }
 }
@@ -744,7 +741,7 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
                 if(!renderRun.isPassive) { // Active run ?
                     frame.watchPropertyChange(read);
                 }
-                renderRun.readsReacordingTarget?.push(read);
+                renderRun.readsRecordingTarget?.push(read);
             };
             persistent.watchedProxyFacade.onAfterRead(readListener)
 
@@ -790,7 +787,10 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
             }
         }
         finally {
-            renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
+            renderRun.load_recordedReads = []; // renderRun is still referenced in closures, but this field is not needed, so let's not hold a big grown array here and may be prevent memory leaks
+            renderRun.readsRecordingTarget = undefined;
+            renderRun.binding_lastSeenRead = undefined;
+            renderRun.binding_lastSeenRead_outerMostGetter = undefined;
             currentRenderRun = undefined;
         }
     }
@@ -906,6 +906,13 @@ type LoadOptions = {
     silent?: boolean
 
     /**
+     * Specify dependencies. Just like with React's useEffect(...), a re-load will only be done, if these change. They are compared <strong>shallowly</strong>
+     * You can insert the special identifier: READS_INSIDE_LOADER_FN. I.e. <code>import {READS_INSIDE_LOADER_FN} from "react-deepwatch"; ... load(..., {deps: [READS_INSIDE_LOADER_FN, myOtherDep]})</code>
+     * <p>Default: Auto-dependencies. See readme.md</p>
+     */
+    deps?: unknown[]
+
+    /**
      * Performance: Set to false, to mark following `load(...)` statements do not depend on the result. I.e when used only for immediate rendering or passed to child components only. I.e. <div>{load(...)}/div> or `<MySubComponent param={load(...)} />`:
      * Therefore, the following `load(...)` statements may not need a reload and can run in parallel.
      * <p>
@@ -999,7 +1006,6 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
     const renderRun = currentRenderRun;
     const frame = renderRun.frame
     const persistent = frame.persistent;
-    const recordedReadsSincePreviousLoadCall = renderRun.load_recordedReads; renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // Pop recordedReads
     const callerSourceLocation = callStack.stack ? getCallerSourceLocation(callStack.stack) : undefined;
 
     // Determine loadCallId:
@@ -1029,6 +1035,9 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         loadCall = new LoadCall(loadCallId, persistent, options, callStack, callerSourceLocation);
     }
     persistent.loadCalls.set(loadCallId, isUnique?loadCall:null);
+
+    //safety check:
+    !(options.deps !== undefined && !loadCall.isUniquelyIdentified()) || throwError(`Deps used, but the load(...) statement is not uniquely identifyable. Please specify a key via load(..., { key:<your key>, ...})`);
 
     loadCall.options = options; // Update options. It is allowed that these can change over time. I.e. the poll interval or the name.
 
@@ -1091,10 +1100,37 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
 
 
     function inner()  {
-        const recordedReadsAreEqualSinceLastCall = lastLoadRun && recordedReadsArraysAreEqual(recordedReadsSincePreviousLoadCall, lastLoadRun.recordedReadsBefore)
-        if(!recordedReadsAreEqualSinceLastCall) {
-            persistent.loadRuns = persistent.loadRuns.slice(0, renderRun.loadCallIndex); // Erase all loadRuns after here (including this one).
-            lastLoadRun = undefined;
+        function depsHaveChanngedSinceLastCall() {
+            if(!lastLoadRun) {
+                return true;
+            }
+            if(options.deps === undefined) { // Auto-deps?
+                // Safety check:
+                if(!("auto_recordedReads" in lastLoadRun.deps)) {
+                    return true; // Seems like options have changed
+                }
+
+                if(!recordedReadsArraysAreEqual(renderRun.load_recordedReads, lastLoadRun.deps.auto_recordedReads)) { // Performance note: Quadratic growth here! Could optimize this
+                    return true;
+                }
+            }
+            else if(Array.isArray(options.deps)) { // Deps explicitly specified?
+                // Safety check:
+                if(!("explicit" in lastLoadRun.deps)) {
+                    return true; // Seems like options have changed
+                }
+
+                if(!arraysAreShallowlyEqual(lastLoadRun.deps.explicit, options.deps)) { // deps have changed?
+                    return true;
+                }
+            }
+            else {
+                throw new Error("Illegal value for options.deps");
+            }
+
+            if (lastLoadRun.recordedReadsInsideLoaderFn?.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+                return true;
+            }
         }
 
         /**
@@ -1104,11 +1140,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             if(!lastLoadRun) { // call was not recorded last render or is invalid?
                 return false;
             }
-            if (!recordedReadsAreEqualSinceLastCall) {
-                return false;
-            }
-
-            if (lastLoadRun.recordedReadsInsideLoaderFn.some((r => r.isChanged))) { // I.e for "load( () => { fetch(props.x, myLocalValue) }) )" -> props.x or myLocalValue has changed?
+            if (depsHaveChanngedSinceLastCall()) {
                 return false;
             }
 
@@ -1122,10 +1154,10 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
                     return {result: fallback.value};
                 }
 
-                lastLoadRun.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
+                lastLoadRun.recordedReadsInsideLoaderFn?.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
                 throw lastLoadRun.result.promise; // Throwing a promise will put the react component into suspense state
             } else if (lastLoadRun.result.state === "rejected") {
-                lastLoadRun.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
+                lastLoadRun.recordedReadsInsideLoaderFn?.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
                 throw lastLoadRun.result.rejectReason;
             } else {
                 throw new Error("Invalid state of lastLoadRun.result.state")
@@ -1136,7 +1168,7 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
         if (canReuse !== false) { // can re-use ?
             const lastCall = persistent.loadRuns[renderRun.loadCallIndex];
 
-            lastCall.recordedReadsInsideLoaderFn.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn
+            lastCall.recordedReadsInsideLoaderFn?.forEach(read => frame.watchPropertyChange(read)) // Also watch recordedReadsInsideLoaderFn (again in this frame)
 
             return canReuse.result; // return proxy'ed result from last call:
         }
@@ -1154,10 +1186,16 @@ export function load(loaderFn: (oldResult?: unknown) => Promise<unknown>, option
             // *** make a loadRun / exec loaderFn ***:
 
             let loadRun = new LoadRun(loadCall!, loaderFn, renderRun.loadCallIndex);
-            loadRun.recordedReadsBefore = recordedReadsSincePreviousLoadCall;
-            const resultPromise = Promise.resolve(loadRun.exec()); // Exec loaderFn
+            loadRun.deps = options.deps === undefined?{auto_recordedReads:  [...renderRun.load_recordedReads]}:{explicit: [...options.deps]} // Save deps
+            // Exec loaderFn and record reasd to loadRun.recordedReadsInsideLoaderFn:
+            if(options.deps === undefined || options.deps.includes(READS_INSIDE_LOADER_FN)) { // should reord reads ?
+                loadRun.recordedReadsInsideLoaderFn = []; // this will make the following call record into them
+            }
+            const resultPromise = renderRun.withRecordReadsInto(() => {
+                return Promise.resolve(loadRun.exec());
+            }, loadRun.recordedReadsInsideLoaderFn);
+
             loadRun.loaderFn = options.interval?loadRun.loaderFn:undefined; // Remove reference if not needed to not risk leaking memory
-            loadRun.recordedReadsInsideLoaderFn = renderRun.load_recordedReads; renderRun.readsReacordingTarget= renderRun.load_recordedReads = []; // pop and remember the (immediate) reads from inside the loaderFn
 
             resultPromise.then((value) => {
                 loadRun.result = {state: "resolved", resolvedValue: value};
@@ -1476,3 +1514,8 @@ export function debug_tagComponent(name: string) {
 
 export {preserve} from "./preserve"
 export type {PreserveOptions} from "./preserve"
+
+/**
+ * Flag/Single Enum
+ */
+export const READS_INSIDE_LOADER_FN = {}

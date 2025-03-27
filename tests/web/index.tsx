@@ -1,6 +1,6 @@
 import React, {useState, Suspense, memo} from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, watched, load, debug_tagComponent, isLoading, loadFailed, bind} from "react-deepwatch/develop";
+import {watchedComponent, useWatchedState, watched, load, debug_tagComponent, isLoading, loadFailed, bind, READS_INSIDE_LOADER_FN} from "react-deepwatch/develop";
 import {Simulate} from "react-dom/test-utils";
 import {ErrorBoundary} from "react-error-boundary";
 
@@ -118,6 +118,7 @@ const ShouldReLoadIfStateChanges = watchedComponent((props) => {
         counter2:0,
         counter3:0,
         withDelay: true,
+        withDeps: false,
     });
 
     return <div>
@@ -127,14 +128,14 @@ const ShouldReLoadIfStateChanges = watchedComponent((props) => {
         {/* Dont display counter2: we don't want to trigger refreshes on changes this way but want to see, if changes cause re executing the loader */}
 
         <div>Retrieve counter1 dependant: {load( delayed( () => { return `counter: ${state.counter1}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter} times - should increase on button 1 only`},state.withDelay?1000:0), {fallback: "Loading"})}</div>
-        <div>Retrieve counter2 dependant: {load( delayed( () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`}, state.withDelay?500:0), {fallback: "Loading2"})}</div>
+        <div>Retrieve counter2 dependant: {load( delayed( () => { return `counter: ${state.counter2}, fetched ${++ShouldReLoadIfStateChanges_fetchCounter2} times - should increase on button 2 only`}, state.withDelay?500:0), {fallback: "Loading2", deps:state.withDeps?[READS_INSIDE_LOADER_FN]:undefined})}</div>
         <ShouldReLoadIfStateChanges3_Inner model={state}/>
 
         <button onClick={ () => state.counter1++} >1: Increase counter1</button><br/>
         <button onClick={ () => state.counter2++} >2: Increase counter2</button><br/>
         <button onClick={ () => state.counter3++} >3: Increase counter3</button><br/>
-        <input type="checkbox" checked={state.withDelay} onChange={(event) => {
-            state.withDelay = event.target.checked}} />with delay
+        <input type="checkbox" {...bind(state.withDelay)}/>with delay<br/>
+        <input type="checkbox" {...bind(state.withDeps)}/>with explicit deps (2nd load). <i>Should not need reload if counter1 changes</i>
     </div>
 });
 
