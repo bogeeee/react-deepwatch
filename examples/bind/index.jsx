@@ -1,6 +1,6 @@
 import React from "react";
 import {createRoot} from "react-dom/client";
-import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve, bind} from "react-deepwatch"
+import {watchedComponent, useWatchedState, watched, load, poll, isLoading, loadFailed, preserve, bind, READS_INSIDE_LOADER_FN} from "react-deepwatch"
 
 const MyComponent = watchedComponent(props => {
     const myState = useWatchedState({
