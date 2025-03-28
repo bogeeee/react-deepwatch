@@ -1,7 +1,7 @@
 # React Deepwatch - no more setState and less
 
 
-**Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write less code 😊.
+**Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write much less code😊.
 - **Performance friendly**  
   React Deepwatch uses a [proxy-facade](https://github.com/bogeeee/proxy-facades) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
 - **Can watch your -model- as well**  
@@ -24,7 +24,7 @@ const MyComponent = watchedComponent(props => {
         <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
         
         {/* you can fetch data from **inside** conditional render code or loops😎! No useEffect needed! Knows its dependencies automatically👍 */}        
-        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await simulateFetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await fetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
 
         {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
@@ -61,10 +61,10 @@ const MyComponent = watchedComponent(props => {
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.jsx)
 
 ## and less... loading code
-Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**.
+Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**:
 
 ````jsx
-import {watchedComponent, load, poll, isLoading, loadFailed, preserve} from "react-deepwatch"
+import {watchedComponent, load, poll, isLoading, loadFailed, preserve, READS_INSIDE_LOADER_FN} from "react-deepwatch"
 
 const MyComponent = watchedComponent(props => {
 
@@ -77,10 +77,35 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
 
-**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. That means, it records all reads from previous code in your component function _(which can as well be the result of a previous `load(...)` call)_  plus the reads immediately inside the `load(...)` call. _Here: props.myProperty._
-The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.  
-👍 load(...) can be inside a conditional block or a loop. Then it has already recorded the condition + everything else that leads to the computation of load(...)'s point in time and state 😎._
-For this mechanic to work, **make sure, all sources are watched**: `props` and `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
+Note: 👍 load(...) even can be inside a conditional block or a loop 👍.  
+The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.
+**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. For this auto-dependency mechanic to work, **make sure, all sources to your component are watched**: `props` and other `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
+
+### Dependencies
+By default, everything prior to the load(...) statement in your code and immediately in your loaderFn is treated as a dependency. 
+This is the perfectly safe and care free option for most use cases. But it can sometimes be too broad and lead to more reloads than necessary. Therefore, when you do performance sensitive fetches, you can fine-tune the dependencies:
+
+<details>
+  <summary>Fine-tuning your deps</summary>
+
+Just like with React's `useEffect(..., [...yourDeps...])`, You can explicitly specify the deps in the LoadOptions#deps array. 
+Additional, there is one special symbol which you can insert there:` READS_INSIDE_LOADER_FN`. This will treat trackable reads on objects in your loaderFn as dependencies. Examples:
+````jsx
+const someWatchedObj = ... //somehow derived (deeply) from props, watched(...) or useWatchedState(...) or load(...)
+const showPrices = state.showPrices;
+
+{load(async () => {return await fetchFruitsFromServer(showPrices)}) } // ✅ Auto dependencies. This will include the recorded "read" in the line 'const showPrices = state.showPrices;' and therefore reload when showPrices is different (=any determnistic value that's derived from the inputs till here, which covers everything you could need👍).
+{load(async () => {return await fetchFruitsFromServer(state.showPrices         )}, {deps: [READS_INSIDE_LOADER_FN            ]}) } // ✅
+{load(async () => {return await fetchFruitsFromServer(someWatchedObj.users.get("Axel").getPrefs().showPrices)}, {deps: [READS_INSIDE_LOADER_FN]}) } // ✅ Depending on properties, starting from **on** a watched object/Array/Set/Map or derived stuff is all tracked (Thanks to proxy-facades, it will follow and track this complete path of reads and watch for changes precisely there👍).
+{load(async () => {return await fetchFruitsFromServer(showPrices               )}, {deps: [READS_INSIDE_LOADER_FN            ]}) } // ❌ Reading the closured variable showPrices is not trackable by react-deepwatch. It can only track reads **on** (proxied-) objects = You should see a `.` or a `[...]`
+{load(async () => {return await fetchFruitsFromServer(showPrices               )}, {deps: [READS_INSIDE_LOADER_FN, showPrices]}) } // ✅ List showPrices additionally as depExplicitly. Note: READS_INSIDE_LOADER_FN is not needed here, but it doesn't hurt.
+
+{load(async () => {
+    const fruits = await fetchFruitsFromServer(); // Takes some time...
+    return fruits.filter(f => f.indexOf(state.myFilter) >=0); // ❌ READS_INSIDE_LOADER_FN cant't catch the state.myFilter read, cause it did not happen **immediately** but after an async fork/not in the same sync block. You have to keep this in mind. Also for the auto-dependencies.  
+}, {deps: [READS_INSIDE_LOADER_FN]}) }
+````
+</details>
 
 ### Show a 🌀loading spinner
 To show a 🌀loading spinner / placeholder during load, either...
@@ -95,13 +120,10 @@ either...
  - **try/catch around the load(...)** statement. Caveat: You must check, if caught is `instanceof Promise` and re-throw it then. _Because this is the way for `load` to signal, that things are loading._ _Or..._
  - **call** the **loadFailed()** probing function. This looks more elegant than the above. _See jsDoc for usage example._
 
-### Performance optimization for load(...)
-To reduce the number of expensive `myFetchFromServer` calls, try the following:
-- Move the load(...) call as upwards in the code as possible, so it depends on fewer props / state / watched objects.
-- See the `LoadOptions#fallback`, `LoadOptions#silent` and `LoadOptions#critical` settings.
-- Use the `preserve` function on all your fetched data, to smartly ensure non-changing object instances in your app (`newFetchResult` **===** `oldFetchResult`; Triple-equals. Also for the deep result_). Changed object instances can either cascade to a lot of re-loads or result in your component still watching the old instance.
+### Object instance preserving
+Use the `preserve` function on all your fetched data, to smartly ensure non-changing object instances in your app (`newFetchResult` **===** `oldFetchResult`; Triple-equals. Also for the deep result_). Changed object instances can either cascade to a lot of re-loads or result in your component still watching the old instance.
   _Think of it like: The preserve function does for your data, what React does for your component tree: It smartly remembers the instances, if needed with the help of an id or key, and re-applies the re-fetched/re-rendered properties to them, so the object-identity/component-state stays the same._  
-  👍 `load(...)` does call `preserve` by default to enforce this paradigm and give you the best, trouble free experience.
+  👍 `load(...)` does `preserve` its result by default to enforce this paradigm and give you the best, trouble free experience.
 
 ### Caveats
 - The component function might return and empty `</>` on the first load and **produce a short screen flicker**. This is [because React's Suspense mechasim is not able to remeber state at that time](https://react.dev/reference/react/Suspense#caveats). To circumvent this, specify `WatchedComponentOptions#fallback`.
@@ -137,7 +159,7 @@ const MyParentComponent = watchedComponent(props => {
 
 _This example will trigger both onChange handlers._
 
-_Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that came from the server_
+_Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Keep that in mind, when i.e. comparing objects by instance (I.e. row === selectedRow) if they arrived in different ways. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that **came** from the server_
 
 # ...and less onChange code for &lt;input/&gt; elements
 
@@ -172,7 +194,7 @@ There are also other libraries that address proxying the state:
 while React-deepwatch set's its self apart in these areas:
 - Deep (not only shallow-) proxying
 - Tracking changes above **and** below the proxy = also on the unproxied object.
-- Fully transparent support for `this`, getters/setters (treated white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
+- Full transparent support for `this`, getters/setters (treated as white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
 - Very comprehensive `load(...)` concept with auto dependencies, fallbacks, probing functions, instance preserving mechanism, possible in conditionals/loops, supports polling, error boundaries.  
 - &lt;Input/&gt;  bind(...)ing
 
