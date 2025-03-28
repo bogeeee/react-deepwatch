@@ -1,6 +1,9 @@
 {
   "name": "react-deepwatch-development",
   "version": "1.0.0",
+  "scripts": {
+    "npm_fresh_install": "rm -rf node_modules && rm -rf react-deepwatch/node_modules && rm -rf tests/web/node_modules &&  npm prune --no-package-lock"
+  },
   "workspaces": [
     "react-deepwatch",
     "tests/web"
