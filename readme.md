@@ -189,7 +189,7 @@ Besides `load`, there's also the `poll` function, which works similar, but re-lo
 
 ### Similar libraries
 There are also other libraries that address proxying the state:  
-[valito](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [wana](https://www.npmjs.com/package/wana),
+[valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [wana](https://www.npmjs.com/package/wana),
 
 while React-deepwatch set's its self apart in these areas:
 - Deep (not only shallow-) proxying
