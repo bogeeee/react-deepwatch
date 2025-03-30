@@ -1,7 +1,7 @@
 # Deeper explanation of the mechanics
 ## Re-rendering
 - A watchedComponents is re-rendered **by React from the outside**, only when shallow properties change. It uses React's [memo](https://react.dev/reference/react/memo) therefore. See the `WatchedComponentOptions#memo` flag.
-- A watchedComponents re-renders it's self when a property, that is actually "read" inside the render function (=component function), later changes. This is from these (root) sources:
+- A watchedComponents re-renders **it's self** when a property, that is actually "read" inside the render function (=component function), later changes. This is from these (root) sources:
     - the `props`
     - the `useWatchedState`
     - a `watched(useContext(...))`
@@ -38,8 +38,11 @@ So, what is a "read"? tl;dr: Just everything anywhere that reads from the above 
 Change tracking works also (by default), if these properties are changed externally / from the outside / not through the proxy-facade that you see in the render function. See `WatchedComponentOptions#watchOutside`.  
 _Thanks to the mothers and fathers of Ecmascript to make all this possible through fancy proxy tricks ;)_
 - _Besides that, re-renders can be made for operational purposes: to display the state change of a load or to serve the isLoading() and loadFailed() probing functions, etc..._
+For more info, how it works, see the [proxy-facades library](https://github.com/bogeeee/proxy-facades).
 
 ## Re-loading
+_This text is a bit redundant with, what's also explained in the readme and it only assumes the (default) auto-dependencies here_  
+
 The `loaderFn` from inside the `load(...)` statements is re-executed, when:
 - A property, that is read immediately in the `loaderFn`, later changes. _Immediately = in the same sync block / not after an awaited i/o operation._
 - The precondition changes: Meaning, those reads that were done **before** the `load(...)` statement, their value later changes.
