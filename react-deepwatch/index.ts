@@ -16,6 +16,7 @@ import {
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
+import {_global as retsync_global, RetsyncWaitsForPromiseException, Retsync2promiseCall} from "proxy-facades/retsync";
 
 let sharedWatchedProxyFacade: WatchedProxyFacade | undefined
 
@@ -484,6 +485,11 @@ class Frame {
     persistent!: WatchedComponentPersistent;
 
     /**
+     * Whether a load from retsync code is currently happening
+     */
+    retsyncIsLoading = false
+
+    /**
      * See {@link https://github.com/bvaughn/react-error-boundary?tab=readme-ov-file#dismiss-the-nearest-error-boundary}
      * From optional package.
      */
@@ -747,9 +753,11 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
 
             try {
                 try {
-                    let result = componentFn(persistent.watchedProps as PROPS);  // Run the user's component function
-                    renderRun.handleRenderFinishedSuccessfully();
-                    return result;
+                    return withRetsyncHandling(() => {
+                        let result = componentFn(persistent.watchedProps as PROPS);  // Run the user's component function
+                        renderRun.handleRenderFinishedSuccessfully();
+                        return result;
+                    })
                 }
                 finally {
                     renderRun.onFinallyAfterUsersComponentFnListeners.forEach(l => l()); // Call listeners
@@ -1283,7 +1291,7 @@ export function isLoading(nameFilter?: string): boolean {
     // Validity check:
     if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
-    return probe(() => renderRun.frame.persistent.loadRuns.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
+    return probe(() => (!nameFilter && renderRun.frame.retsyncIsLoading) || renderRun.frame.persistent.loadRuns.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
 }
 
 /**
@@ -1311,6 +1319,7 @@ export function loadFailed(nameFilter?: string): unknown {
 
     return probe(() => {
         return (renderRun.frame.persistent.loadRuns.find(c => c.result.state === "rejected" && (!nameFilter || c.name === nameFilter))?.result as any)?.rejectReason;
+        // Note for retsyncs: We are not able to check for failed retsyncs. Cause when they are failed, we are already the next **frame** and unlike load(...)s, the cannot persist in loaded/failed state. (just for the failed feature, we would need to track, which reads it depends on, and we would have to identify it. Too much effort)
     }, undefined);
 }
 
@@ -1392,6 +1401,35 @@ function probe<T>(probeFn: () => T, defaultResult: T) {
     })
 
     return defaultResult;
+}
+
+function withRetsyncHandling<T>(componentFn: () => T) {
+    const orig_retsync2promiseCall = retsync_global.retsync2promiseCall;
+    try {
+        retsync_global.retsync2promiseCall = new Retsync2promiseCall();
+        return componentFn();
+    } catch (e) {
+        if (e !== null && e instanceof RetsyncWaitsForPromiseException) {
+            // Validity check:
+            if (currentRenderRun === undefined) throw new Error("Illegal state")
+
+            currentRenderRun.frame.retsyncIsLoading = true;
+
+            // Await result and save it (like in retsync2promise from "proxy-facades/retsync"):
+            e.promise.then((value) => {
+                retsync_global.resolvedPromiseValues.set(e.promise, value);
+                renderRun.frame.persistent.handleChangeEvent();
+            })
+
+            // TODO: Handle error
+
+
+            throw e.promise;
+        }
+        throw e;
+    } finally {
+        retsync_global.retsync2promiseCall = orig_retsync2promiseCall;
+    }
 }
 
 export type ValueOnObject<T> = {value: T}

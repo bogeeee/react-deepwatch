@@ -11,7 +11,7 @@
       "es7",
       "es6",
       "dom",
-      "es2022.error",
+      "es2022",
       "es2015.proxy",
       "esnext.iterator"
     ],

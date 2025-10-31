@@ -16,6 +16,7 @@ import {
 
 import { css } from '@emotion/react'
 import {Checkbox, MenuItem, Select, Switch, TextField} from "@mui/material";
+import {asyncResource2retsync} from "proxy-facades/retsync";
 
 function renderCounter(msg: string) {
     const [state] = useState({counter: 0});
@@ -233,15 +234,37 @@ const ShouldReactToOtherPropChangesWhileLoading_Inner = new watchedComponent(pro
 
 const ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback = new watchedComponent(props => {
     const model = props.model;
-
     //if(loadFailed())  return "Load failed: " + loadFailed().message;
-
     return <div>
         {!model.canceled?
             <div>Result of fetch: {load(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), model.withFallbacks?{fallback: "loading..."}:{})}</div>:
             <div>Canceled</div>}
     </div>
 }, {fallback: <div>Loading with WatchedComponentOptions#fallback...</div>})
+
+const ShouldReactToOtherPropChangesWhileLoading_Inner_retsync = new watchedComponent(props => {
+    const model = props.model;
+
+    //if(loadFailed()) return "Load failed: " + loadFailed().message
+
+    return <div>
+        {!model.canceled?
+            <div>Result of retsync fetch: {asyncResource2retsync(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), undefined, `${model.counter}_${model.shouldReturnAnError}`)}</div>:
+            <div>Canceled</div>}
+    </div>
+})
+
+const ShouldReactToOtherPropChangesWhileLoading_Inner_retsync_WithOwnComponentFallback = new watchedComponent(props => {
+    const model = props.model;
+
+    //if(loadFailed())  return "Load failed: " + loadFailed().message;
+
+    return <div>
+        {!model.canceled?
+            <div>Result of retsync fetch: {asyncResource2retsync(delayed(() => `counter: ${model.counter}`, 2000, model.shouldReturnAnError), undefined, `${model.counter}_${model.shouldReturnAnError}`)}</div>:
+            <div>Canceled</div>}
+    </div>
+}, {fallback: <div>Loading with WatchedComponentOptions#fallback retsync...</div>})
 
 const ShouldReactToOtherPropChangesWhileLoading = new watchedComponent(props => {
     const state = useWatchedState({counter:0, withFallbacks: false, canceled: false, shouldReturnAnError: false});
@@ -251,8 +274,10 @@ const ShouldReactToOtherPropChangesWhileLoading = new watchedComponent(props => 
         <ExampleErrorBoundary>
         <Suspense fallback={<div>Loading...</div>}>
             <ShouldReactToOtherPropChangesWhileLoading_Inner model={state} />
+            <ShouldReactToOtherPropChangesWhileLoading_Inner_retsync model={state} />
         </Suspense>
         <ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback model={state}/>
+        <ShouldReactToOtherPropChangesWhileLoading_Inner_retsync_WithOwnComponentFallback model={state}/>
         </ExampleErrorBoundary>
         <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
             state.withFallbacks = event.target.checked}} />withFallback<br/>
