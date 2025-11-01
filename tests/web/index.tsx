@@ -272,8 +272,10 @@ const ShouldReactToOtherPropChangesWhileLoading = new watchedComponent(props => 
     return <div>
         <h3>ShouldReactToOtherPropChangesWhileLoading</h3>
         <ExampleErrorBoundary>
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div>Loading ShouldReactToOtherPropChangesWhileLoading_Inner...</div>}>
             <ShouldReactToOtherPropChangesWhileLoading_Inner model={state} />
+        </Suspense>
+        <Suspense fallback={<div>Loading ShouldReactToOtherPropChangesWhileLoading_Inner_retsync...</div>}>
             <ShouldReactToOtherPropChangesWhileLoading_Inner_retsync model={state} />
         </Suspense>
         <ShouldReactToOtherPropChangesWhileLoading_Inner_WithOwnComponentFallback model={state}/>

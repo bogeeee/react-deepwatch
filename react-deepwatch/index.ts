@@ -363,8 +363,9 @@ class WatchedComponentPersistent {
      * - true = rerender requested (will re-render asap) or just starting the render and changes in props/state/watched still make it into it.
      * - false = ...
      * - RenderRun = A passive render is requested. Save reference to the render run as safety check
+     * - Error = rerender that should immediately fail with that error is requested
      */
-    reRenderRequested: boolean | RenderRun = false;
+    reRenderRequested: boolean | RenderRun | Error = false;
 
     _doReRender!: () => void
 
@@ -393,15 +394,21 @@ class WatchedComponentPersistent {
         this._doReRender()
     }
 
-    requestReRender(passiveFromRenderRun?: RenderRun) {
+    requestReRender(passiveFromRenderRun?: RenderRun, withImmediateError?: Error) {
         const wasAlreadyRequested = this.reRenderRequested !== false;
 
         // Enable the reRenderRequested flag:
-        if(passiveFromRenderRun !== undefined && this.reRenderRequested !== true) {
-            this.reRenderRequested = passiveFromRenderRun;
-        }
-        else {
-            this.reRenderRequested = true;
+        if(this.reRenderRequested !== true) { // Not already at the strongest un-overridable state?
+            if (passiveFromRenderRun !== undefined) {
+                !withImmediateError || throwError("Illeagal arguments"); // Validity check
+                this.reRenderRequested = passiveFromRenderRun;
+            }
+            else if(withImmediateError !== undefined) {
+                this.reRenderRequested = withImmediateError;
+            }
+            else {
+                this.reRenderRequested = true;
+            }
         }
 
         if(wasAlreadyRequested) {
@@ -487,7 +494,7 @@ class Frame {
     /**
      * Whether a load from retsync code is currently happening
      */
-    retsyncIsLoading = false
+    pendingRetsyncPromise?: Promise<unknown>;
 
     /**
      * See {@link https://github.com/bvaughn/react-error-boundary?tab=readme-ov-file#dismiss-the-nearest-error-boundary}
@@ -700,6 +707,18 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
         const [renderCounter, setRenderCounter] = useState(0);
         const [persistent] = useState(new WatchedComponentPersistent(options));
         persistent._doReRender = () => setRenderCounter(renderCounter+1);
+
+        if(persistent.reRenderRequested instanceof Error) {
+            // **Immediately** fail and show the <ErrorBoundary>. Hack / haven't thought trough, if hard-skipping all the following will lead to bugs.
+            const error = persistent.reRenderRequested
+            // Clear persistent.reRenderRequested flag:
+            setTimeout(() => { // Wait a while, cause the <ErrorBoundary/> immediately causes this to rerender another 2 times
+                if(persistent.reRenderRequested === error) { // Nothing has changed so far
+                    persistent.reRenderRequested = false;
+                }
+            })
+            throw error;
+        }
 
         const isPassive = persistent.nextReRenderMightBePassive()
 
@@ -1291,7 +1310,7 @@ export function isLoading(nameFilter?: string): boolean {
     // Validity check:
     if(renderRun === undefined) throw new Error("isLoading is not used from inside a watchedComponent")
 
-    return probe(() => (!nameFilter && renderRun.frame.retsyncIsLoading) || renderRun.frame.persistent.loadRuns.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
+    return probe(() => (!nameFilter && renderRun.frame.pendingRetsyncPromise !== undefined) || renderRun.frame.persistent.loadRuns.some(c => c.result.state === "pending" && (!nameFilter || c.name === nameFilter)), false);
 }
 
 /**
@@ -1410,21 +1429,42 @@ function withRetsyncHandling<T>(componentFn: () => T) {
         return componentFn();
     } catch (e) {
         if (e !== null && e instanceof RetsyncWaitsForPromiseException) {
+            const retsyncPromise = e.promise;
+
             // Validity check:
             if (currentRenderRun === undefined) throw new Error("Illegal state")
 
-            currentRenderRun.frame.retsyncIsLoading = true;
+            const renderRun = currentRenderRun;
+
+            renderRun.frame.pendingRetsyncPromise = retsyncPromise;
 
             // Await result and save it (like in retsync2promise from "proxy-facades/retsync"):
-            e.promise.then((value) => {
+            retsyncPromise.then((value) => {
                 retsync_global.resolvedPromiseValues.set(e.promise, value);
+
+                if(renderRun.frame.pendingRetsyncPromise !== retsyncPromise) { // Not waiting for this promise (=obsolete)?
+                    return;
+                }
+
+                renderRun.frame.pendingRetsyncPromise = undefined;
                 renderRun.frame.persistent.handleChangeEvent();
             })
 
-            // TODO: Handle error
+
+            retsyncPromise.catch((reason) => {
+                // TODO retsync_global.resolvedPromiseValues. -> mark as failed
+                if(renderRun.frame.pendingRetsyncPromise !== retsyncPromise) { // Not waiting for this promise (=obsolete)?
+                    return;
+                }
+
+                renderRun.frame.pendingRetsyncPromise = undefined;
+                renderRun.frame.dismissErrorBoundary?.();
+                const reasonAsError = (reason != null && reason instanceof Error)?reason:new Error(`${reason}`);
+                renderRun.frame.persistent.requestReRender(undefined, reasonAsError); // Rerender, but fail immediately so the retsync does not get run again, resultung in an endless loop
+            });
 
 
-            throw e.promise;
+            throw retsyncPromise;
         }
         throw e;
     } finally {

@@ -11,7 +11,7 @@
   "dependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "proxy-facades": "^1.5.0",
+    "proxy-facades": "^1.6.0",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.5",
     "react-deepwatch": "1.x",
