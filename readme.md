@@ -185,6 +185,9 @@ You can also use `watched` similarly  to `useWatchedState` to watch any global o
 ### poll
 Besides `load`, there's also the `poll` function, which works similar, but re-loads in regular intervals. _See jsDoc_
 
+### Retsync
+Besides `load`, react-deepwatch also supports hosting [retryable-synchronous](https://github.com/bogeeee/proxy-facades/blob/main/retsync.ts) code.
+
 ### [Deeper explanation of the mechanics](https://github.com/bogeeee/react-deepwatch/blob/main/react-deepwatch/mechanics.md)
 
 ### Similar libraries
