@@ -4,6 +4,7 @@
   "description": "",
   "type": "module",
   "scripts": {
+    "#": "Before running dev, you must run  the ../../react-deepwatch/package.json's 'clean' script",
     "dev": "vite --force",
     "clean": "tsc --build --clean",
     "build": "tsc --build --force"
