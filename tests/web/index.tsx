@@ -152,11 +152,12 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
     const state = useWatchedState({
         withFallbacks: false,
         withIsLoadingIndicator: false,
+        withRetsyncItems: false,
         returnOnIsLoading: false,
         critical: true,
         silent: false,
         globalCounter:0,
-        items: [{name: "item1", counter:0, poll:false},{name: "item2", counter:0, poll: false},{name: "item3", counter:0, poll:false},{name: "item4", counter:0, poll:false}]
+        items: [{name: "item1", counter:0, poll:false},{name: "item2", counter:0, poll: false},{name: "item3", counter:0, poll:false},{name: "item4", counter:0, isRetsync:true},{name: "item5", counter:0, poll:false},{name: "item6", counter:0, isRetsync:true}]
     });
 
     const globalCounter = state.globalCounter;
@@ -173,7 +174,13 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
         {(state.withIsLoadingIndicator && isLoading())?"🌀 ":null}
         {state.items.map(item => <div key={item.name}>
             <b>{item.name}</b>&#160;
-            Retrieve item.counter's dependant: {load(
+            Retrieve item.counter's dependant: {item.isRetsync?
+                (state.withRetsyncItems?
+                    asyncResource2retsync(delayed(() => { return {msg: `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`}
+                    }, 500), undefined, `loadsInLoop_item_${item.name}_counter_${item.counter}_globalcounter_${globalCounter}`).msg
+                :"retsync item skipped")
+            :
+            load(
                 delayed(() => {
                     if(item.name === "item3") { return {msg: `counter: ${item.counter} (no fetch stats. polling should not re-render)`}}
                     return {msg: `counter: ${item.counter},  fetched ${itemsFetchCounter_incr(item.name)} times. globalCounter:${globalCounter}`}
@@ -183,7 +190,7 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
             &#160;<button onClick={ () => item.counter++} >Increase items's counter</button> {(state.withIsLoadingIndicator && isLoading(item.name))?"⬅️🌀 ":null}
             &#160;<input type="checkbox" checked={item.poll} onChange={(event) => {item.poll = event.target.checked}} />poll
         </div>)}
-
+<br/>
         <input type="checkbox" checked={state.withFallbacks} onChange={(event) => {
             state.withFallbacks = event.target.checked}} />withFallbacks
         <input type="checkbox" checked={state.withIsLoadingIndicator} onChange={(event) => {
@@ -194,8 +201,10 @@ const MultipleLoadsInALoop = watchedComponent((props) => {
             state.silent = event.target.checked}} />silent
         <input type="checkbox" checked={state.critical} onChange={(event) => {
             state.critical = event.target.checked}} />critical
-
-        <br/><button onClick={ () => state.globalCounter++} >Increase globalCounter</button><i>Should load in parallel if the above features are flipped</i>
+        <br/><button onClick={ () => state.globalCounter++} >Increase globalCounter</button><i>Should load in parallel if the above features are flipped</i><br/>
+        <br/>
+        <input type="checkbox" checked={state.withRetsyncItems} onChange={(event) => {
+            state.withRetsyncItems = event.target.checked}} />With retsync items<br/>
     </div>
 }, {memo: false});
 
