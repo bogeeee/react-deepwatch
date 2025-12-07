@@ -702,6 +702,13 @@ class RenderRun {
 }
 let currentRenderRun: RenderRun| undefined;
 
+/**
+ * @returns is a watched component's componentFn currently running?
+ */
+export function isRendering() {
+    return currentRenderRun !== undefined;
+}
+
 export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS) => any, options: WatchedComponentOptions = {}) {
     const outerResult = (props: PROPS) => {
         const [renderCounter, setRenderCounter] = useState(0);

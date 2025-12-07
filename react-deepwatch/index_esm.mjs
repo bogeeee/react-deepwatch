@@ -13,7 +13,9 @@ export const debug_tagComponent = cjsIndex.debug_tagComponent
 export const binding = cjsIndex.binding
 export const bind = cjsIndex.bind
 export const READS_INSIDE_LOADER_FN = cjsIndex.READS_INSIDE_LOADER_FN
+export const isRendering = cjsIndex.isRendering
 
 
 import cjsPreserve from "./preserve.js"
+import {isRendering} from "./index";
 export const preserve = cjsPreserve.preserve
