@@ -1515,7 +1515,7 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
             obj = renderRun.binding_lastSeenRead_outerMostGetter.proxy
             key = renderRun.binding_lastSeenRead_outerMostGetter.key
             //@ts-ignore
-            prop === obj[key] || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
+            prop === obj[key] || throwError(`The value of the last recorded read is not, what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\n The read was detected as a property-accessor: 'someObject.${key}'. If you didn't intend to bind to a getter/setter, try bind(...,{isAccessor:false})`);
         } else { // property access without getter:
             if (!(lastRead instanceof RecordedPropertyRead)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
 
