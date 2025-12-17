@@ -19,6 +19,112 @@ export function reThrowWithHint(e: unknown, hint: string) {
     throw e;
 }
 
+export function errorToString(e: any): string {
+    try {
+        // Handle other types:
+        if (!e || typeof e !== "object") {
+            return String(e);
+        }
+        if (!e.message) { // e is not an ErrorWithExtendedInfo ?
+            return JSON.stringify(e);
+        }
+        e = e as Error;
+
+        return (e.name ? `${e.name}: ` : "") + (e.message || String(e)) +
+            (e.stack ? `\n${e.stack}` : '') +
+            (e.fileName ? `\nFile: ${e.fileName}` : '') + (e.lineNumber ? `, Line: ${e.lineNumber}` : '') + (e.columnNumber ? `, Column: ${e.columnNumber}` : '') +
+            (e.cause ? `\nCause: ${errorToString(e.cause)}` : '')
+    }
+    catch (e) {
+        return errorToString(new Error(`Error converting error to string. Original error's message: ${(e as any)?.message}`));
+    }
+}
+
+/**
+ * When running with jest, the cause is not displayed. This fixes it.
+ * @param error
+ */
+export function fixErrorForJest(error: Error) {
+    if(typeof process === 'object' && process.env.JEST_WORKER_ID !== undefined) { // Are we running with jest ?
+        const cause = (error as any).cause;
+        if(cause) {
+            error.message = `${error.message}, cause: ${errorToString(cause)}\n*** end of cause ***`
+        }
+    }
+    return error;
+}
+
+
+
+/**
+ * Globally control diagnosis settings
+ */
+export const ErrorDiagnosis = {
+    /**
+     * Disabled by default, cause it might cost too much time
+     */
+    record_spawnAsync_stackTrace: false,
+}
+
+function toplevelLogError(caught: unknown) {
+    console.error(caught);
+}
+
+/**
+ * Handles top level Errors, with advanced global options for error diagnosis
+ * @see ErrorDiagnosis
+ * @param fn
+ * @param exitOnError produces an unhandled- rejection which exits the (nodejs) process.
+ */
+export function topLevel_withErrorLogging(fn: () => void, exitOnError = true) {
+    try {
+        fn();
+    }
+    catch (e) {
+        toplevelLogError(e);
+    }
+}
+
+/**
+ * Spawns fn and handles top level Errors, with advanced global options for error diagnosis
+ * @see ErrorDiagnosis
+ * @param fn
+ * @param exitOnError for compatibility with nodejs
+ */
+export function spawnAsync(fn: () => Promise<void>, exitOnError = false) {
+
+    let spawnStack: string | undefined
+    if (ErrorDiagnosis.record_spawnAsync_stackTrace) {
+        spawnStack = new Error("Dummy error, to record creator stack").stack;
+    }
+
+    const promise = fn();
+    promise.catch((caught) => {
+
+        if(spawnStack) {
+            // Fix spawnStack:
+            spawnStack = spawnStack.replace(/^.*Dummy error, to record creator stack.*?\n/, ""); // remove that confusing line
+
+            if (caught instanceof Error) {
+                caught.stack = `${caught.stack}\n*** spawnAsync stack: ***\n${spawnStack}`
+            } else {
+                caught = fixErrorForJest(new Error(`Promise was rejected.\n${spawnStack}\n*** ignore this following stack and skip to 'reason' ****`, {cause: caught}));
+            }
+        }
+        else {
+            // Add hint:
+            const hint = `Hint: if the stacktrace does not show you the place, where the async is forked, do: import {ErrorDiagnosis} from 'util'; ErrorDiagnosis.record_spawnAsync_stackTrace=true;`
+            if (caught instanceof Error) {
+                caught.message+="\n" +  hint;
+            } else {
+                caught = fixErrorForJest(new Error(`Promise was rejected. ${hint}`, {cause: caught}));
+            }
+        }
+
+        toplevelLogError(caught);
+    });
+}
+
 export function isObject(value: unknown) {
     return value !== null && typeof value === "object";
 }

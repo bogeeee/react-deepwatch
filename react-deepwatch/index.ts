@@ -10,13 +10,13 @@ import {
     isObject,
     newDefaultMap,
     PromiseState,
-    recordedReadsArraysAreEqual,
+    recordedReadsArraysAreEqual, spawnAsync,
     throwError
 } from "./Util";
 import {useLayoutEffect, useState, createElement, Fragment, ReactNode, useEffect, useContext, memo} from "react";
 import {ErrorBoundaryContext, useErrorBoundary} from "react-error-boundary";
 import {_preserve, preserve, PreserveOptions} from "./preserve";
-import {_global as retsync_global, RetsyncWaitsForPromiseException, Retsync2promiseCall} from "proxy-facades/retsync";
+import {_global as retsync_global, RetsyncWaitsForPromiseException, Retsync2promiseCall, retsync2promise} from "proxy-facades/retsync";
 
 let sharedWatchedProxyFacade: WatchedProxyFacade | undefined
 
@@ -1539,8 +1539,10 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
             }, undefined)
         },
         set value(value) {
-            //@ts-ignore
-            obj[key] = value;
+            spawnAsync(() => retsync2promise(() => {
+                //@ts-ignore
+                obj[key] = value;
+            }));
         }
     }
 }
