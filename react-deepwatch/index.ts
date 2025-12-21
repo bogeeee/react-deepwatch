@@ -1502,7 +1502,7 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
 
     // Obtain lastRead:
     const lastRead = renderRun.binding_lastSeenRead;
-    if(!lastRead) throw new Error("Illegal state: no recorded reads. ${diagnosis_msg()}");
+    if(!lastRead) throw new Error(`Illegal state: no recorded reads. ${diagnosis_msg()}`);
     const diagnosis_moreMsg = () => `The last 'read' in your component function was of type: ${lastRead.constructor.name}`
     if(!(lastRead instanceof RecordedReadOnProxiedObject)) throw new Error(`Cannot determine property for input into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
 
