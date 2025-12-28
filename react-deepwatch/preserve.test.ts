@@ -63,8 +63,8 @@ describe('Preserve', () => {
 
         test(`${mode.name}: Take over props`, () => {
             const old = mode.proxyOrEnhance({a: 1, b: "str"});
-            const preserved = preserveAndCheckEquality(old, {a: 2, b: "str", c: 3});
-            expect(_.isEqual(preserved, {a: 2, b: "str", c: 3})).toBeTruthy();
+            const preserved = preserveAndCheckEquality(old, {a: 2, b: "str", c: 3, nan: Number.NaN, bi: BigInt(123), d: undefined, e: null, f: false});
+            expect(_.isEqual(preserved, {a: 2, b: "str", c: 3, nan: Number.NaN, bi: BigInt(123), d: undefined, e: null, f: false})).toBeTruthy();
         })
 
         test(`${mode.name}: old props should be deleted`, () => {

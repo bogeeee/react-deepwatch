@@ -259,7 +259,9 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
 
     const result = inner();
     if(result !== newValue) { // old was preserved
-        call.possiblyObsoleteObjects.add(newValue as object);
+        if(newValue !== null && typeof newValue === "object") {
+            call.possiblyObsoleteObjects.add(newValue as object);
+        }
     }
     else {
         call.markUsed(newValue);
