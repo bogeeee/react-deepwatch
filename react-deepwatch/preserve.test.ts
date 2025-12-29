@@ -409,6 +409,24 @@ describe('Preserve', () => {
             expect(preserved.get(reallyNewObjKey3)).toBe("y");
             expect(preserved.get("v") === reallyNewValue3).toBeTruthy();
             expect(preserved.get("x")).toBe("y");
+
+
+            // Values without key (they shouldn't need a key):
+            {
+                let oldValue1 = {value: "obj1"};
+                let oldValue2 = {value: "obj2"};
+                const oldMap = new Map<any, any>([["k1", oldValue1], ["k2", oldValue2]]);
+
+                let newValue1 = {value: "obj1"};
+                let reallyNewValue2 = {value: "newObj2"};
+                const newMap = new Map<any, any>([["k1", newValue1], ["k2", reallyNewValue2]]);
+
+                let preserved = preserveAndCheckEquality(oldMap, newMap);
+                expect(preserved.get("k1")).toEqual({value: "obj1"});
+                expect(preserved.get("k2")).toEqual({value: "newObj2"});
+                expect(preserved.get("k2") === oldValue2).toBeTruthy();
+            }
+
         })
 
         //TODO: regard mode
