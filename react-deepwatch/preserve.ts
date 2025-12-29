@@ -318,12 +318,10 @@ function preserve_map<T>(oldMap: Map<unknown, unknown>, newMap: Map<unknown, unk
 
     // Register old ids/keys:
     const oldKeysRegistry = new ObjRegistry(call.options);
-    for(const key of oldMap.keys()) {
-        oldKeysRegistry.register(key, `${diagnosis_path}`);
-    }
     const oldValuesRegistry = new ObjRegistry(call.options);
-    for(const value of oldMap.values()) {
-        oldValuesRegistry.register(value, `${diagnosis_path}`);
+    for(const [key,value] of oldMap.entries()) {
+        oldKeysRegistry.register(key, `${diagnosis_path}[${diagnisis_shortenValue(key)}]`);
+        oldValuesRegistry.register(value, `${diagnosis_path}[${diagnisis_shortenValue(key)}]`);
     }
 
     oldMap.clear();
