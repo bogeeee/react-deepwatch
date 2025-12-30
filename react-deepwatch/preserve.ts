@@ -82,8 +82,8 @@ type ID = string | number;
 class ObjRegistry {
     preserveOptions: PreserveOptions;
 
-    objectsById = new Map<ID, object>();
-    objectsByKey = new Map<ID, object>();
+    diag_objectsById = new Map<ID, object>();
+    diag_objectsByKey = new Map<ID, object>();
     objectsByIdAndKey = new Map<string, object>();
 
 
@@ -96,7 +96,7 @@ class ObjRegistry {
 
         const result: {id?: ID, key?: ID} = {};
 
-        for(const mode of [{propName: "id", map: this.objectsById, diag_other: this.objectsByKey}, {propName: "key", map: this.objectsByKey, diag_other: this.objectsById}]) {
+        for(const mode of [{propName: "id", map: this.diag_objectsById, diag_other: this.diag_objectsByKey}, {propName: "key", map: this.diag_objectsByKey, diag_other: this.diag_objectsById}]) {
             const throwInconsistent = (map: Map<ID, object>) => {throw new PreserveError(`Objects must be consistent in either having an id or a key or both set, but found: ${diagnisis_shortenValue(obj)} and ${diagnisis_shortenValue(map.values().next().value)}. Path: ${diagnosis_path}`)};
 
             //@ts-ignore
@@ -142,10 +142,10 @@ class ObjRegistry {
         // Add to maps:
         this.objectsByIdAndKey.set(idAndKeyString, value);
         if(idAndKey.id !== undefined) {
-            this.objectsById.set(idAndKey.id, value)
+            this.diag_objectsById.set(idAndKey.id, value)
         }
         if(idAndKey.key !== undefined) {
-            this.objectsByKey.set(idAndKey.key, value)
+            this.diag_objectsByKey.set(idAndKey.key, value)
         }
     }
 
