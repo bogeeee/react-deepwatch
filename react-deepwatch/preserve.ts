@@ -29,9 +29,10 @@ export type PreserveOptions = {
     ignoresKeys?: boolean,
 
     /**
-     * Threats an object that was preserved and reoccurs on a completely differnt place (not the same parent) as the same = re-uses that instance.
+     * Threats an object that was preserved and reoccurs on a completely different place (not the same parent) as the same = re-uses that instance.
      * <p>Default: false</p>
      * <p>Disabled by default because too much magic / behaviour flipping depending indirectly related data.</p>
+     * @deprecated Those are preserved (as logically expected) there will be an error on conflicts
      */
     preserveCircular?: boolean
 
@@ -46,12 +47,12 @@ class PreserveCall {
     /**
      * preserved/old -> new (obsolete) object
      */
-    mergedToNew = new Map<object,object>();
+    preservedToNew = new Map<object,object>();
 
     /**
      * new (obsolete) object -> preserved/old object
      */
-    newToPreserved = new Map<object,object>();
+    newToPreserved = new Map<object, {preserved: object, diag_newPath: string}>();
 
     possiblyObsoleteObjects = new Set<object>();
 
@@ -175,6 +176,14 @@ export function _preserve<T>(oldValue: T, newValue: T, options: PreserveOptions,
     let call = new PreserveCall(options, diagnosis);
     let result = preserve_inner(oldValue, newValue, call, "<root>");
 
+    // Find all new objects in the result that were preserved in some other place and set them to that preserved instance:
+    result = visitReplace(result, (value, visitChilds, context) => {
+        if(call.newToPreserved.has(value)) {
+            value = call.newToPreserved.get(value)!.preserved;
+        }
+        return visitChilds(value, context) // Should be necessary but not really thought about it much
+    });
+
     // Invalidate obsolete objects
     if(options.destroyObsolete !== false && call.possiblyObsoleteObjects.size > 0) {
         const obsoleteCause = diagnosis?.callStack || new Error("Preserve was called");
@@ -201,35 +210,45 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
             return newValue;
         }
 
-        if (call.options.preserveCircular) {
-            const preserved = call.newToPreserved.get(newValue);
-            if (preserved !== undefined) {
-                return preserved as T;
-            }
-        }
-
         if (!mergeable(oldValue, newValue)) {
+            if(call.newToPreserved.has(newValue)) {
+                return call.newToPreserved.get(newValue)!.preserved;
+            }
             return newValue;
         }
 
         // Narrow types:
         if (oldValue === null || typeof oldValue !== "object" || newValue === null || typeof newValue !== "object") {
+            if(call.newToPreserved.has(newValue)) {
+                return call.newToPreserved.get(newValue)!.preserved;
+            }
             return newValue;
         }
 
 
-        if (call.mergedToNew.has(oldValue)) { // Already merged or currently merging?
+        if (call.preservedToNew.has(oldValue)) { // Already merged or currently merging?
             // Safety check:
-            if (call.mergedToNew.get(oldValue) !== newValue) {
-                throw new PreserveError(`Cannot replace object ${diagnisis_shortenValue(oldValue)} into ${diagnisis_shortenValue(newValue)} in: ${diagnosis_path}. It has already been replaced by another object: ${diagnisis_shortenValue(call.mergedToNew.get(oldValue))}. Please make your objects have a proper id or key and are not used in multiple places where these can be mistaken.\n${normalizeListsHint}`)
+            if (call.preservedToNew.get(oldValue) !== newValue) {
+                throw new PreserveError(`Cannot replace object ${diagnisis_shortenValue(oldValue)} into ${diagnisis_shortenValue(newValue)} in: ${diagnosis_path}. It has already been replaced by another object: ${diagnisis_shortenValue(call.preservedToNew.get(oldValue))}. Please make sure, your objects have a proper id or key and are not used in multiple places where these can be mistaken.\n${normalizeListsHint}`)
             }
 
             return oldValue;
         }
 
         // *** Merge: ****
-        call.mergedToNew.set(oldValue, newValue);
-        call.newToPreserved.set(newValue, oldValue);
+        // Conflict check:
+        if(call.newToPreserved.has(newValue)) {
+            const otherPreserved = call.newToPreserved.get(newValue)!;
+            if(otherPreserved.preserved === oldValue) { // new -> old was exactly already preserved through other place?
+                return oldValue;
+            }
+            else {
+                throw new PreserveError(`Conflict: The same object instance (used in 2 places) is about to be preserved to different objects. This is not meaningful, that an instance in the new data structure represents 2 different instances in the old structure.\nPlace a: ${otherPreserved.diag_newPath}; old/preserved object: ${diagnisis_shortenValue(otherPreserved.preserved)}\nPlace b: ${diagnosis_path}; old/preserved object: ${diagnisis_shortenValue(oldValue)}`)
+            }
+        }
+
+        call.preservedToNew.set(oldValue, newValue);
+        call.newToPreserved.set(newValue, {preserved: oldValue, diag_newPath: diagnosis_path});
 
         if (Array.isArray(oldValue)) {
             return preserve_array(oldValue as unknown[], newValue as unknown[], call, diagnosis_path) as T;
@@ -450,7 +469,7 @@ function mergeable(oldValue: unknown, newValue: unknown) {
 
 /**
  *
- * Scans root deeply for Arrays and for each found array, it call normalizeList, which squeezes the items with the same id/key into one object instance.
+ * Scans root deeply for Arrays and for each found array, it calls normalizeList, which makes identical items with the same id/key one (shared) object instance.
  * @see normalizeList
  * @param root
  * @param options
@@ -465,7 +484,7 @@ export function normalizeLists<T extends object>(root: T, options: PreserveOptio
 }
 
 /**
- * Squeezes the items with the same id/key into one object instance.
+ * Makes identical items with the same id/key one (shared) object instance
  * @param list
  * @param options
  * @param diagnosis_path internal

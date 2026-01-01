@@ -347,6 +347,85 @@ describe('Preserve', () => {
                 const preserved = preserveAndCheckEquality(old, newObj);
                 expectSameInstance(preserved.b, preserved);
             }
+
+        });
+
+        //TODO: regard mode
+        test(`Circular references 2`, () => {
+            // new has a new structure: newObj.b[0] points back to newObj / tests arrays:
+            {
+                const old: any = {a: 1};
+                old.b = old;
+                let newObj: any = {a: 2};
+                newObj.b = [newObj];
+                const preserved = preserve(old, newObj, );
+                expectSameInstance(preserved.b[0], preserved);
+            }
+
+            // Set
+            {
+                const old: any = {};
+                let newObj: any = {};
+                newObj.b = new Set([newObj]);
+                const preserved = preserve(old, newObj);
+                expectSameInstance([...preserved.b.values()][0], preserved);
+            }
+
+            // Map
+            {
+                const old: any = {};
+                let newObj: any = {};
+                newObj.b = new Map([["x", newObj]]);
+                const preserved = preserve(old, newObj, );
+                expectSameInstance(preserved.b.get("x"), preserved);
+            }
+        });
+
+        test(`Instances used in multiple places`, () => {
+            // Map, shared objects
+            {
+                const oldShared = {x: "old"}
+                const oldObj: any = {b: new Map([["x", oldShared], ["y", oldShared]])};
+                const newShared = {x: "new"}
+                const newObj: any = {b: new Map([["x", newShared], ["y", newShared]])};
+
+                const preserved = preserve(oldObj, newObj);
+                expectSameInstance(preserved.b.get("x"), oldShared);
+                expectSameInstance(preserved.b.get("y"), oldShared);
+                expect(preserved.b.get("x").x).toBe("new");
+            }
+
+            // Map,
+            {
+                const oldShared = {x: "old"}
+                const oldObj: any = {b: new Map([["x", oldShared], ["y", oldShared]])};
+                const newShared = {x: "new"}
+                const new2_conflicting = {x: "new"}
+                const newObj: any = {b: new Map([["x", newShared], ["y", new2_conflicting]])};
+                expect(() => preserve(oldObj, newObj)).toThrow("It has already been replaced by another object");
+            }
+
+            // To root
+            {
+                const old: any = {id: "root", a: 1};
+                old.b = [old];
+                let newObj: any = {a: 2};
+                const conflictingObj = {id: "root"}
+                newObj.b = [conflictingObj];
+                expect(() => preserve(old, newObj)).toThrow("It has already been replaced by another object");
+            }
+
+
+            // Map,
+            {
+                const oldShared = {x: "old"}
+                const oldShared2 = {x: "old2"}
+                const oldObj: any = {b: new Map([["x", oldShared], ["y", oldShared2]])};
+                const newShared = {x: "new"}
+                const newObj: any = {b: new Map([["x", newShared], ["y", newShared]])};
+                expect(() => preserve(oldObj, newObj)).toThrow("Conflict");
+            }
+
         });
 
         //TODO: regard mode
