@@ -1,4 +1,4 @@
-import {visitReplace} from "./Util";
+import {isObject, visitReplace} from "./Util";
 import _ from "underscore";
 import {invalidateObject, deleteProperty} from "proxy-facades";
 
@@ -176,13 +176,15 @@ export function _preserve<T>(oldValue: T, newValue: T, options: PreserveOptions,
     let call = new PreserveCall(options, diagnosis);
     let result = preserve_inner(oldValue, newValue, call, "<root>");
 
-    // Find all new objects in the result that were preserved in some other place and set them to that preserved instance:
-    result = visitReplace(result, (value, visitChilds, context) => {
-        if(call.newToPreserved.has(value)) {
-            value = call.newToPreserved.get(value)!.preserved;
-        }
-        return visitChilds(value, context) // Should be necessary but not really thought about it much
-    });
+    if(isObject(result)) {
+        // Find all new objects in the result that were preserved in some other place and set them to that preserved instance:
+        result = visitReplace(result, (value, visitChilds, context) => {
+            if (isObject(value) && call.newToPreserved.has(value)) {
+                value = call.newToPreserved.get(value)!.preserved;
+            }
+            return visitChilds(value, context) // Should be necessary but not really thought about it much
+        });
+    }
 
     // Invalidate obsolete objects
     if(options.destroyObsolete !== false && call.possiblyObsoleteObjects.size > 0) {
@@ -232,7 +234,7 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
                 throw new PreserveError(`Cannot replace object ${diagnisis_shortenValue(oldValue)} into ${diagnisis_shortenValue(newValue)} in: ${diagnosis_path}. It has already been replaced by another object: ${diagnisis_shortenValue(call.preservedToNew.get(oldValue))}. Please make sure, your objects have a proper id or key and are not used in multiple places where these can be mistaken.\n${normalizeListsHint}`)
             }
 
-            return oldValue;
+            return oldValue as T;
         }
 
         // *** Merge: ****
@@ -240,7 +242,7 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
         if(call.newToPreserved.has(newValue)) {
             const otherPreserved = call.newToPreserved.get(newValue)!;
             if(otherPreserved.preserved === oldValue) { // new -> old was exactly already preserved through other place?
-                return oldValue;
+                return oldValue as T;
             }
             else {
                 throw new PreserveError(`Conflict: The same object instance (used in 2 places) is about to be preserved to different objects. This is not meaningful, that an instance in the new data structure represents 2 different instances in the old structure.\nPlace a: ${otherPreserved.diag_newPath}; old/preserved object: ${diagnisis_shortenValue(otherPreserved.preserved)}\nPlace b: ${diagnosis_path}; old/preserved object: ${diagnisis_shortenValue(oldValue)}`)
@@ -273,10 +275,10 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
                 }
             }
         }
-        return oldValue;
+        return oldValue as T;
     }
 
-    const result = inner();
+    const result = inner() as T; // "as T" because i don't get why inner is "T | object"
     if(result !== newValue) { // old was preserved
         if(newValue !== null && typeof newValue === "object") {
             call.possiblyObsoleteObjects.add(newValue as object);
@@ -480,7 +482,7 @@ export function normalizeLists<T extends object>(root: T, options: PreserveOptio
             normalizeList(value, options, context.diagnosis_path);
         }
         return visitChilds(value, context);
-    }, "onError");
+    }, {trackPath: "onError"});
 }
 
 /**
