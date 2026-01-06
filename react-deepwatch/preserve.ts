@@ -278,17 +278,28 @@ export function preserve_inner<T>(oldValue: T, newValue: T, call: PreserveCall, 
         return oldValue as T;
     }
 
-    const result = inner() as T; // "as T" because i don't get why inner is "T | object"
-    if(result !== newValue) { // old was preserved
-        if(newValue !== null && typeof newValue === "object") {
-            call.possiblyObsoleteObjects.add(newValue as object);
-        }
-    }
-    else {
-        call.markUsed(newValue);
-    }
+    try {
 
-    return result;
+        const result = inner() as T; // "as T" because i don't get why inner is "T | object"
+        if (result !== newValue) { // old was preserved
+            if (newValue !== null && typeof newValue === "object") {
+                call.possiblyObsoleteObjects.add(newValue as object);
+            }
+        } else {
+            call.markUsed(newValue);
+        }
+
+        return result;
+    }
+    catch (e) {
+        // Refine message. Adds more comfort to debugging:
+        if(e instanceof Error) {
+            if(e.message.indexOf("\nPath") === -1) {
+                e.message+=`\nPath: ${diagnosis_path}`;
+            }
+        }
+        throw e;
+    }
 }
 
 function preserve_array<T>(oldArray: Array<unknown>, newArray: Array<unknown>, call: PreserveCall, diagnosis_path: string): Array<unknown> {
