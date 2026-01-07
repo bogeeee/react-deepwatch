@@ -1523,9 +1523,10 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
             key = lastRead.key;
 
             // Check if bind is deterministic:
+            const result = lastRead.proxyHandler.facade.getProxyFor(lastRead.value);
             //@ts-ignore
-            lastRead.value === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
-            prop === lastRead.value || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+            result === obj[key] || throwError(`Illegal state: lastRead does not seem to be deterministic. ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
+            prop === result || throwError(`The value of the last recorded read is not what's passed as 'prop' argument into bind(prop). ${diagnosis_msg()}\nMore info:${diagnosis_moreMsg()}`);
         }
     }, undefined);
 
