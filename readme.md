@@ -194,7 +194,7 @@ Let's make the value binding code a bit easier:
 import {bind} from "react-deepwatch";
 
 // Old:
-<input type="text" value={myState.myValue} onChange={(event) => myState.myValue = event.how.was.that.again.i.just.want.the.value} />
+<input type="text" value={myState.myValue} onChange={(event) => myState.myValue = event.how.was.that.again.i.just.want.the.f...ing.value} />
 
 // New:
 <input type="text" {...bind(myState.myValue)} />
