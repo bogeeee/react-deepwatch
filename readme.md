@@ -1,15 +1,34 @@
-# React Deepwatch - no more setState and less
+# React Deepwatch - automatic rerender on data changes
+
+This framework eliminates the need to care about any state management or any code that tells a components that it's state has changed. I.e. the all-known `set[myVar's]State()` calls. 
+Think of just having plain data, _meaning: props, state, or business object inside your state. Or global data structures where your component uses some small parts of it_. 
+If any of this data changes, React Deepwatch **detects those changes automatically and re-renders** the component and also re-runs [load(...) statements](#load) should they depend on that changed data. 
+_These inline `load(...)` statements are the second cool trick that this library offers, which comes by as a benefit of all this data awareness😎_
+
+So how does it work? Can this even work? How is it possible to track all these reads and writes automatically?   
+The answer: Javascript offers very powerful (and almost forgotten) language features with allow you to "virtualize" (or trap) every read/write in any data structure. 
+There is the mighty [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) which can intercept and record all your React-component-function's reads and writes to the data once you hand it that proxy.
+
+So your component-function will see and use all the data through glasses of proxies. But what about if you also have existing global data objects that already exists and are passed to your component from the outside?
+Yes, this data is also tracked and reacts to external changes. This is also achieved by [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).
+All these "tricks and traps" were abstracted away into [one coherent -and therefore well testable- core layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
+Note that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊.
 
 
-**Deeply watches your state-object and props** for changes. **Re-renders** automatically😎 and makes you write much less code😊.
-- **Performance friendly**  
-  React Deepwatch uses a [proxy-facade](https://github.com/bogeeee/proxy-facades) to **watch only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph behind your state or props is.
-- **Can watch your -model- as well**  
-  If a (used) property in props points to your model, a change there will also trigger a re-render. In fact, you can [watch anything](#watched) ;)
+# Performance friendly  
+  React Deepwatch **watches only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph (the data) behind your state or props is. 
+  Only relevant values will trigger a re-render and only of relevant components, meaning not the whole tree under it, as you were used to with classical unmemoized React components.
 
-# Quick example to show you most features
+# Quick example to show you the nice features
+Beside the pure data awareness, there are other beneficial features that come with this lib.
+Here are all basic features, put together into one example. Hope, you're not overwhelmed with it. Just imagine, what this component does and how few code is needed to achieve it.
+
+![](examples/less-loading-code/screenshot.png)
+
+
+
 ````jsx
-// Will reload the fruits and show a 🌀 during load, if you type in the filter box.
+// Will reload the fruits and show a 🌀 during load, if you type something in the filter box.
 const MyComponent = watchedComponent(props => {
     const state = useWatchedState({
         filter: "",
@@ -20,15 +39,15 @@ const MyComponent = watchedComponent(props => {
         {/* A nice bind syntax. No more 'onChange(...)' code */}
         Filter      <input type="text"     {...bind(state.filter    )} />
         
-        {/* state.filter="" will automatically rerender and re-run the following server fetch, if necessary👍 */}
+        {/* Setting state.filter="" will automatically rerender and re-run the following server fetch, if necessary👍 */}
         <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
         
         {/* you can fetch data from **inside** conditional render code or loops😎! No useEffect needed! Knows its dependencies automatically👍 */}        
-        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await fetchFruitsFromServer(state.filter), {fallback:"loading list 🌀"} )}</i></div><br/>
+        <div>Here are the fruits, fetched from the Server:<br/><i>{ load(async ()=> await fetchFruitsFromServer(state.filter), {fallback:"loading the list 🌀"} )}</i></div><br/>
 
-        {/* The above load(...) code is independent of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
+        {/* Side note: The above load(...) code is **independent** of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
-        {/* showing here, that clicking "show prices" will **only** do a rerender: */}
+        {/* showing here, that clicking "show prices" will only do a rerender but not re-do the fetchFruitsFromServer: */}
         {state.showPrices?<div>Free today!</div>:null}
     </div>
 });
@@ -43,7 +62,8 @@ npm install --save react-deepwatch
 ````
 
 # Usage
-## no more setState
+
+## Watched state
 ````jsx
 import {watchedComponent, watched, useWatchedState} from "react-deepwatch"
           
@@ -60,8 +80,10 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.jsx)
 
-## and less... loading code
-Now that we already have the ability to deeply record our reads, let's see if there's also a way to **cut away the boilerplate code for `useEffect`**:
+## Load(...)
+
+Load(...) can async'ly **fetch data from anywhere** inside your render code. You don't have to code any useEffect constructs around it anymore. 
+Simply load data at exactly the point where you need it. That means, it can even can be inside a conditional block or a loop 👍.
 
 ````jsx
 import {watchedComponent, load, poll, isLoading, loadFailed, preserve, READS_INSIDE_LOADER_FN} from "react-deepwatch"
@@ -77,7 +99,6 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
 
-Note: 👍 load(...) even can be inside a conditional block or a loop 👍.  
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.
 **`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. For this auto-dependency mechanic to work, **make sure, all sources to your component are watched**: `props` and other `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
 
@@ -161,7 +182,7 @@ _This example will trigger both onChange handlers._
 
 _Note, that `watched(myState.form) !== myState.form`. It created a new proxy object in a new proxy-facade layer here, just for the purpose of deep-watching everything under it. Keep that in mind, when i.e. comparing objects by instance (I.e. row === selectedRow) if they arrived in different ways. Sometimes you may want to take advantage of it, so that modifications in the originaly layer (in MyParentComponent) won't fire the onChange event / call the postFormToTheSerer function. I.e. for updates that **came** from the server_
 
-# ...and less onChange code for &lt;input/&gt; elements
+# {...bind}: Less onChange code for &lt;input/&gt; elements
 
 Let's make the value binding code a bit easier:
 ````jsx
