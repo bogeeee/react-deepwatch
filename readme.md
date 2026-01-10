@@ -6,12 +6,12 @@ If any of this data changes, React Deepwatch **detects those changes automatical
 _These inline `load(...)` statements are the second cool trick that this library offers, which comes by as a benefit of this data awareness😎_
 
 So how does it work? Can this even work? How is it possible to track all these reads and writes automatically?   
-The answer: Javascript offers very powerful (and almost forgotten) language features with allow you to "virtualize" (or trap) every read/write in any data structure. 
+The answer: Javascript offers very powerful (and almost forgotten) language features with allows React Deepwatch to "virtualize" (or trap) every read/write in any data structure. 
 On the one hand, there is the mighty [Proxy class](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) which can intercept and record all your React-component-function's reads and writes to the data once you hand it that proxy.
 So your component-function will see and use all the data through glasses of proxies.  
-But what about if you have existing global data objects that already exist and are passed to your component from the outside? Yes, this data is also tracked and reacts to external changes. This is, on the other hand, achieved by [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).  
+But what about if you have existing global data objects that already exist and are passed to your component from the outside? Yes, this data is also tracked and reacts to external changes. This is achieved by other [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).  
 The proxy stuff and all these "tricks and traps" were abstracted away into [one coherent -and therefore well testable- core layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
-The good thing is, that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊 and React Deepwatch components (watchedComponents) integrate seamlessly in between your existing React component tree and existing data graph. 
+The good thing is, that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊 and React Deepwatch components (watchedComponents) integrate seamlessly in your existing React component tree and existing data graph. 
 
 
 # Performance friendly  
@@ -83,7 +83,7 @@ const MyComponent = watchedComponent(props => {
 You can also hand parts of the state to child components and let them modify it. No limits here.  
 
 **Make sure, all sources to your component are watched** if you want them to trigger re-rendering: `props` are already automatically watched; For context, use `watched(useContext(...))`. For any external/global object, wrap it in `watched(myGlobalObject)`.  
-So just wrap every external thing in `watch(...)`. Double watching does not hurt;)
+So as a rule of thumb: Just wrap every (external) thing in `watch(...)`. Double watching does not hurt;)
 
 ## Load(...)
 
