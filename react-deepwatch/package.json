@@ -1,7 +1,7 @@
 {
   "name": "react-deepwatch",
   "version": "1.7.2",
-  "description": "automatically rerender on data change and less fetching code",
+  "description": "automatically re-renders on data changes and also offers **inline** fetches + some more features",
   "keywords": [
     "react",
     "proxy"

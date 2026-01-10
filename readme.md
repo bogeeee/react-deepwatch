@@ -1,4 +1,4 @@
-# React Deepwatch - automatically rerender on data changes
+# React Deepwatch - automatically re-render on data changes
 
 This framework eliminates the need to care about any state management or any code that tells a components that it's state has changed, like, i.e. the usually used `set**myVar's**State()` calls. 
 Think of just having plain data, (_meaning: props, state, or business object inside your state. Or global data structures where your component uses some small parts of it_).   
@@ -38,7 +38,7 @@ const MyComponent = watchedComponent(props => {
         {/* A nice bind syntax. No more 'onChange(...)' code */}
         Filter      <input type="text"     {...bind(state.filter    )} />
         
-        {/* Setting state.filter="" will automatically rerender and re-run the following server fetch, if necessary👍 */}
+        {/* Setting state.filter="" will automatically re-render and re-run the following server fetch, if necessary👍 */}
         <input type="button" value="Clear filter" onClick={() => state.filter = ""} />
         
         {/* you can fetch data from **inside** conditional render code or loops😎! No useEffect needed! Knows its dependencies automatically👍 */}        
@@ -46,7 +46,7 @@ const MyComponent = watchedComponent(props => {
 
         {/* Side note: The above load(...) code is **independent** of state.showPrices, react-deepwatch knows that automatically, so clicking here will NOT exec a re- load(...)👍... */}
         Show prices <input type="checkbox" {...bind(state.showPrices)} />
-        {/* showing here, that clicking "show prices" will only do a rerender but not re-do the fetchFruitsFromServer: */}
+        {/* showing here, that clicking "show prices" will only do a re-render but not re-do the fetchFruitsFromServer: */}
         {state.showPrices?<div>Free today!</div>:null}
     </div>
 });
