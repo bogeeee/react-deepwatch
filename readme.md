@@ -1,27 +1,26 @@
-# React Deepwatch - automatic rerender on data changes
+# React Deepwatch - automatically rerender on data changes
 
-This framework eliminates the need to care about any state management or any code that tells a components that it's state has changed. I.e. the all-known `set[myVar's]State()` calls. 
-Think of just having plain data, _meaning: props, state, or business object inside your state. Or global data structures where your component uses some small parts of it_. 
+This framework eliminates the need to care about any state management or any code that tells a components that it's state has changed, like, i.e. the usually used `set**myVar's**State()` calls. 
+Think of just having plain data, (_meaning: props, state, or business object inside your state. Or global data structures where your component uses some small parts of it_).   
 If any of this data changes, React Deepwatch **detects those changes automatically and re-renders** the component and also re-runs [load(...) statements](#load) should they depend on that changed data. 
-_These inline `load(...)` statements are the second cool trick that this library offers, which comes by as a benefit of all this data awareness😎_
+_These inline `load(...)` statements are the second cool trick that this library offers, which comes by as a benefit of this data awareness😎_
 
 So how does it work? Can this even work? How is it possible to track all these reads and writes automatically?   
 The answer: Javascript offers very powerful (and almost forgotten) language features with allow you to "virtualize" (or trap) every read/write in any data structure. 
-There is the mighty [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) which can intercept and record all your React-component-function's reads and writes to the data once you hand it that proxy.
-
-So your component-function will see and use all the data through glasses of proxies. But what about if you also have existing global data objects that already exists and are passed to your component from the outside?
-Yes, this data is also tracked and reacts to external changes. This is also achieved by [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).
-All these "tricks and traps" were abstracted away into [one coherent -and therefore well testable- core layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
-Note that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊.
+On the one hand, there is the mighty [Proxy class](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) which can intercept and record all your React-component-function's reads and writes to the data once you hand it that proxy.
+So your component-function will see and use all the data through glasses of proxies.  
+But what about if you have existing global data objects that already exist and are passed to your component from the outside? Yes, this data is also tracked and reacts to external changes. This is, on the other hand, achieved by [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).  
+The proxy stuff and all these "tricks and traps" were abstracted away into [one coherent -and therefore well testable- core layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
+The good thing is, that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊 and React Deepwatch components (watchedComponents) integrate seamlessly in between your existing React component tree and existing data graph. 
 
 
 # Performance friendly  
-  React Deepwatch **watches only for those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph (the data) behind your state or props is. 
-  Only relevant values will trigger a re-render and only of relevant components, meaning not the whole tree under it, as you were used to with classical unmemoized React components.
+  React Deepwatch **watches only those properties that are actually used** in your component function. It doesn't matter how complex and deep the graph (the data) behind your state or props is. 
+  Only relevant values are watched and will trigger a re-render. And this only for relevant components, meaning not the whole tree under it, as you were used to with classic un-memoized React components.
 
 # Quick example to show you the nice features
-Beside the pure data awareness, there are other beneficial features that come with this lib.
-Here are all basic features, put together into one example. Hope, you're not overwhelmed with it. Just imagine, what this component does and how few code is needed to achieve it.
+There are also other beneficial features that come with this lib.
+Here are all basic features, put together into one example. Hope, you're not overwhelmed with it. Just imagine, what this component does, and how few code is needed to achieve it.
 
 ![](examples/less-loading-code/screenshot.png)
 
@@ -80,9 +79,15 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.jsx)
 
+`state` is now a Proxy. you can modify anything (deep) under it and the component get's re-rendered (when relevant).
+You can also hand parts of the state to child components and let them modify it. No limits here.  
+
+**Make sure, all sources to your component are watched** if you want them to trigger re-rendering: `props` are already automatically watched; For context, use `watched(useContext(...))`. For any external/global object, wrap it in `watched(myGlobalObject)`.  
+So just wrap every external thing in `watch(...)`. Double watching does not hurt;)
+
 ## Load(...)
 
-Load(...) can async'ly **fetch data from anywhere** inside your render code. You don't have to code any useEffect constructs around it anymore. 
+`load(...)` can async'ly **fetch data anywhere** inside your render code. You don't have to code any useEffect constructs around it anymore. 
 Simply load data at exactly the point where you need it. That means, it can even can be inside a conditional block or a loop 👍.
 
 ````jsx
@@ -100,7 +105,7 @@ const MyComponent = watchedComponent(props => {
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/less-loading-code?title=react-deepwatch%20example&file=index.jsx)
 
 The returned Promise will be await'ed and the component will be put into [suspense](https://react.dev/reference/react/Suspense) that long.
-**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. For this auto-dependency mechanic to work, **make sure, all sources to your component are watched**: `props` and other `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
+**`load(...)` re-executes `myFetchFromServer`, when a dependent value changes**. For this auto-dependency mechanic to work, again, **make sure, all sources to your component are watched**: `props` and other `load(...)`'s result are already automatically watched; For state, use `useWatchedState(...)`; For context, use  `watched(useContext(...))`.
 
 ### Dependencies
 By default, everything prior to the load(...) statement in your code and immediately in your loaderFn is treated as a dependency. 
@@ -132,7 +137,7 @@ const showPrices = state.showPrices;
 To show a 🌀loading spinner / placeholder during load, either...
  - **wrap your component in a [`<Suspense fallback={<div>🌀</div>}>...<MyComponent/>...</Suspense>`](https://react.dev/reference/react/Suspense)**. It can be wrapped at any parent level😎. _Or..._
  - **call isLoading()** inside your component, to probe if any or a certain `load(...)`statement is loading. _See jsDoc for usage example. Mind the caveat of not using it for a condition to cut off a load statement._ _and/or..._   
- - **specify a fallback** value via `load(..., {fallback:"🌀"})`.
+ - **specify a fallback** value via `load(..., {fallback:"🌀"})`. You might return it in the form of your usual data as a quick cheap trick to get it displayed;)
 
 ### Handle errors
 either...
@@ -142,7 +147,7 @@ either...
  - **call** the **loadFailed()** probing function. This looks more elegant than the above. _See jsDoc for usage example._
 
 ### Object instance preserving
-Use the `preserve` function on all your fetched data, to smartly ensure non-changing object instances in your app (`newFetchResult` **===** `oldFetchResult`; Triple-equals. Also for the deep result_). Changed object instances can either cascade to a lot of re-loads or result in your component still watching the old instance.
+Use the `preserve` function on all your fetched data, to smartly ensure non-changing object instances in your app. So to make sure, `newFetchResult` **===** `oldFetchResult`. It does this also for deeper objects. This is the better way, because changed object instances can either cascade to a lot of re-loads or result in bugs because your component is still watching an old instance.
   _Think of it like: The preserve function does for your data, what React does for your component tree: It smartly remembers the instances, if needed with the help of an id or key, and re-applies the re-fetched/re-rendered properties to them, so the object-identity/component-state stays the same._  
   👍 `load(...)` does `preserve` its result by default to enforce this paradigm and give you the best, trouble free experience.
 
@@ -215,7 +220,7 @@ Besides `load`, react-deepwatch also supports hosting [retryable-synchronous](ht
 There are also other libraries that address proxying the state:  
 [valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [wana](https://www.npmjs.com/package/wana),
 
-while React-deepwatch set's its self apart in these areas:
+**⭐⭐React Deepwatch set's its self apart in the following areas:⭐⭐**
 - Deep (not only shallow-) proxying
 - Tracking changes above **and** below the proxy = also on the unproxied object.
 - Full transparent support for `this`, getters/setters (treated as white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
