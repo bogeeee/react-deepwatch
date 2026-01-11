@@ -218,7 +218,7 @@ Besides `load`, react-deepwatch also supports hosting [retryable-synchronous](ht
 
 ### Similar libraries
 There are also other libraries that address proxying the state:  
-[valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [react-smart-state](https://github.com/1-AlenToma/react-smart-state), [wana](https://www.npmjs.com/package/wana)
+[valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [react-smart-state](https://github.com/1-AlenToma/react-smart-state), [wana](https://www.npmjs.com/package/wana)  
 
 **⭐⭐React Deepwatch set's its self apart in the following areas:⭐⭐**
 - Deep (not only shallow-) proxying
@@ -226,6 +226,11 @@ There are also other libraries that address proxying the state:
 - Full transparent support for `this`, getters/setters (treated as white box), user's methods, Sets, Maps, Arrays _(wana seems to support Sets,Maps, Arrays too)_
 - Very comprehensive `load(...)` concept with auto dependencies, fallbacks, probing functions, instance preserving mechanism, possible in conditionals/loops, supports polling, error boundaries.  
 - &lt;Input/&gt;  bind(...)ing
+
+
+Also [Vue](https://vuejs.org) offers features, very similar to this library:
+- [Vue's reactive()](https://vuejs.org/guide/essentials/reactivity-fundamentals#reactive) function is similar to `watched()`, just without external watching.
+- [Vue's watchEffect()](https://vuejs.org/guide/essentials/watchers.html#watcheffect) is the counterpart of `load(...)`.
 
 ### Simplify the server side as well
 If you like, how this library simplifies things for you and want to write the backend (http) endpoints behind your load(...) statements simply as typescript methods, have a look at my flagship project [Restfuncs](https://github.com/bogeeee/restfuncs).
