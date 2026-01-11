@@ -79,8 +79,8 @@ const MyComponent = watchedComponent(props => {
 ````
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/fork/github/bogeeee/react-deepwatch/tree/1.x/examples/no-more-setstate?title=react-deepwatch%20example&file=index.jsx)
 
-`state` is now a Proxy. you can modify anything (deep) under it and the component get's re-rendered (when relevant).
-You can also hand parts of the state to child components and let them modify it. No limits here.  
+`state` is now a Proxy. you can modify anything (deep) under it and the component get's re-rendered (when relevant). _One could say, we've made `state` "reactive", but let's not use this fuzzy term along the docs._
+You can also hand parts of the state to child components and modifications by them will be recognized. No limits here!  
 
 **Make sure, all sources to your component are watched** if you want them to trigger re-rendering: `props` are already automatically watched; For context, use `watched(useContext(...))`. For any external/global object, wrap it in `watched(myGlobalObject)`.  
 So as a rule of thumb: Just wrap every (external) thing in `watch(...)`. Double watching does not hurt;)
