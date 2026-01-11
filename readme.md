@@ -218,7 +218,7 @@ Besides `load`, react-deepwatch also supports hosting [retryable-synchronous](ht
 
 ### Similar libraries
 There are also other libraries that address proxying the state:  
-[valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [wana](https://www.npmjs.com/package/wana),
+[valtio](https://github.com/pmndrs/valtio), [react-easy-state](https://github.com/RisingStack/react-easy-state), [react-smart-state](https://github.com/1-AlenToma/react-smart-state), [wana](https://www.npmjs.com/package/wana)
 
 **⭐⭐React Deepwatch set's its self apart in the following areas:⭐⭐**
 - Deep (not only shallow-) proxying
