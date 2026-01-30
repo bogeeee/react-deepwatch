@@ -10,7 +10,7 @@ The answer: Javascript offers very powerful (and almost forgotten) language feat
 On the one hand, there is the mighty [Proxy class](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) which can intercept and record all your React-component-function's reads and writes to the data once you hand it that proxy.
 So your component-function will see and use all the data through glasses of proxies.  
 But what about if you have existing global data objects that already exist and are passed to your component from the outside? Yes, this data is also tracked and reacts to external changes. This is achieved by other [various javascript tricks](https://github.com/bogeeee/proxy-facades/blob/main/origChangeTracking.ts).  
-The proxy stuff and all these "tricks and traps" were abstracted away into [one coherent -and therefore well testable- core layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
+The proxy stuff and all these "tricks and traps" were abstracted away into [one coherent -and therefore well testable layer behind the scenes](https://github.com/bogeeee/proxy-facades). 
 The good thing is, that all proxied and instrumented objects **act fully transparent**. You data structures behave exactly the same as a non tracked original would. You can as-usual operate on them by your functions or libraries😊 and React Deepwatch components (watchedComponents) integrate seamlessly in your existing React component tree and existing data graph. 
 
 
