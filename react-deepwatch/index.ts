@@ -1532,12 +1532,16 @@ export function binding<T>(prop: T, options?: BindingOptions): ValueOnObject<T> 
 
     return {
         get value() {
-            if(!currentRenderRun)  throw new Error("Illegal state. Not called from the render run of a watchedComponent");
-
-            return currentRenderRun.withRecordReadsInto(() => { // With muted read reacording. Get the value while not recording it as a read for the load(...) statements. Because this value is exclusively consumed by the input component and does never contribute as a dependency to load statements
+            if(currentRenderRun) {
+                return currentRenderRun.withRecordReadsInto(() => { // With muted read reacording. Get the value while not recording it as a read for the load(...) statements. Because this value is exclusively consumed by the input component and does never contribute as a dependency to load statements
+                    //@ts-ignore
+                    return obj[key] as T
+                }, undefined)
+            }
+            else { // From outside a watched component? (It's not disallowed and can be used in rare cases.)
                 //@ts-ignore
                 return obj[key] as T
-            }, undefined)
+            }
         },
         set value(value) {
             spawnAsync(() => retsync2promise(() => {
