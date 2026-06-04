@@ -337,11 +337,21 @@ function preserve_set<T>(oldSet: Set<unknown>, newSet: Set<unknown>, call: Prese
         oldValuesRegistry.register(value, `${diagnosis_path}`);
     }
 
-    oldSet.clear();
+    const oldSetCopy = new Set(oldSet.values())
+    const usedValues = new Set<unknown>()
+
     for(const newValue of newSet.values()) {
-        oldSet.add(oldValuesRegistry.getPreserved(newValue, call, diagnosis_path));
+        const preservedValue = oldValuesRegistry.getPreserved(newValue, call, diagnosis_path);
+        usedValues.add(preservedValue);
+        oldSet.add(preservedValue);
     }
 
+    // Delete unused entries in oldMap:
+    for(const key of oldSetCopy.values()) {
+        if(!usedValues.has(key)) {
+            oldSet.delete(key);
+        }
+    }
 
     return oldSet;
 }
@@ -355,12 +365,20 @@ function preserve_map<T>(oldMap: Map<unknown, unknown>, newMap: Map<unknown, unk
     }
 
     const oldMapCopy = new Map<unknown, unknown>(oldMap.entries());
-    oldMap.clear();
 
+    const usedKeys = new Set<unknown>()
     for(let newKey of newMap.keys()) {
         let newValue = newMap.get(newKey);
         const preservedKey = oldKeysRegistry.getPreserved(newKey, call, diagnosis_path);
+        usedKeys.add(preservedKey);
         oldMap.set(preservedKey, preserve_inner(oldMapCopy.get(preservedKey), newValue, call, `${diagnosis_path}[${diagnisis_shortenValue(newKey)}]`));
+    }
+
+    // Delete unused entries in oldMap:
+    for(const key of oldMapCopy.keys()) {
+        if(!usedKeys.has(key)) {
+            oldMap.delete(key);
+        }
     }
 
     return oldMap;
