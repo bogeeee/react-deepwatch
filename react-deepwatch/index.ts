@@ -2,7 +2,7 @@ import {
     RecordedRead,
     RecordedReadOnProxiedObject,
     RecordedValueRead,
-    WatchedProxyFacade, installChangeTracker, RecordedPropertyRead
+    WatchedProxyFacade, installChangeTracker, RecordedPropertyRead, performance_withoutChangeEvents
 } from "proxy-facades";
 import {
     array_peekLast,
@@ -72,6 +72,8 @@ type WatchedComponentOptions = {
      */
     // Development: Note: Also keep in mind: `this.proxyHandler === other.proxyHandler` in RecordedPropertyRead#equals -> is this a problem? I assume that the component instances/state and therefore the watchedProxyFacades stay the same.
     useGlobalSharedProxyFacade?: boolean
+
+    performance_optimizeForManyReadsOnFewObjects?: boolean
 }
 
 /**
@@ -780,7 +782,9 @@ export function watchedComponent<PROPS extends object>(componentFn:(props: PROPS
             try {
                 try {
                     return withRetsyncHandling(() => {
-                        let result = componentFn(persistent.watchedProps as PROPS);  // Run the user's component function
+                        // Run the user's component function:
+                        let result = options.performance_optimizeForManyReadsOnFewObjects?performance_withoutChangeEvents(() => componentFn(persistent.watchedProps as PROPS)) : componentFn(persistent.watchedProps as PROPS);
+
                         renderRun.handleRenderFinishedSuccessfully();
                         return result;
                     })
